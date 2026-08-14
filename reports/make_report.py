@@ -329,6 +329,94 @@ story += [P("The implicit-reward extraction is additionally cross-checked agains
             "than the shift a prompt-masking bug would produce. This guards the quantity the entire "
             "study measures.")]
 
+# ---------------------------------------------------------- 3.5 first H1/H2 results
+if EVAL:
+    _ORDER = ["UltraFeedback (ID)", "RewardBench:Chat (OOD)", "RewardBench:Chat-Hard (OOD)",
+              "RewardBench:Safety (OOD)", "RewardBench:Reasoning (OOD)", "HH-harmless (OOD)"]
+    _sets = [k for k in _ORDER if k in EVAL] + [k for k in EVAL if k not in _ORDER]
+
+    def _acc(row, scorer):
+        v = row.get(scorer, {}).get("accuracy")
+        return f"{v:.3f}" if isinstance(v, (int, float)) else DASH
+
+    def _lca(row, scorer):
+        v = row.get(scorer, {}).get("len_controlled_acc")
+        return f"{v:.3f}" if isinstance(v, (int, float)) else DASH
+
+    story += [P("3.5&nbsp;&nbsp;First H1/H2 results (single seed, &beta;=0.1, 8k budget)", H2)]
+    story += [P("Pairwise accuracy of each scorer as a preference classifier. <b>Implicit</b> is DPO&rsquo;s "
+                "r&#710;, <b>explicit</b> the Bradley&ndash;Terry RM, and <b>base log-prob</b> the free "
+                "neural baseline (length-normalized log-probability under &pi;<sub>ref</sub>). The final "
+                "column is the McNemar paired test between the implicit and explicit scorers on the "
+                "identical pairs.")]
+
+    _rows = [["Test set", "Implicit", "Explicit", "Base log-prob", "McNemar p"]]
+    for k in _sets:
+        row = EVAL[k]
+        p = row.get("_mcnemar_p_impl_vs_expl")
+        _rows.append([Paragraph(k.replace("RewardBench:", "RewardBench: "), SMALL),
+                      _acc(row, "implicit"), _acc(row, "explicit"), _acc(row, "base_logprob"),
+                      # plain "<" here, not &lt;: raw Table cells are drawn literally, not parsed
+                      ("<0.0001" if isinstance(p, (int, float)) and p < 1e-4
+                       else (f"{p:.4f}" if isinstance(p, (int, float)) else DASH))])
+    t5 = Table(_rows, colWidths=[2.35*inch, 0.85*inch, 0.85*inch, 1.1*inch, 0.9*inch])
+    _style = [
+        ("BACKGROUND",(0,0),(-1,0),colors.HexColor("#294d69")), ("TEXTCOLOR",(0,0),(-1,0),colors.white),
+        ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"), ("FONTSIZE",(0,0),(-1,-1),8.3),
+        ("GRID",(0,0),(-1,-1),0.4,colors.HexColor("#bbbbbb")),
+        ("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white,colors.HexColor("#f3f6f9")]),
+        ("ALIGN",(1,0),(-1,-1),"CENTER"), ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+        ("TOPPADDING",(0,0),(-1,-1),2.5),("BOTTOMPADDING",(0,0),(-1,-1),2.5),
+    ]
+    # Bold the better of implicit/explicit per row; red any scorer that lands below chance.
+    for _i, k in enumerate(_sets, start=1):
+        _im = EVAL[k].get("implicit", {}).get("accuracy")
+        _ex = EVAL[k].get("explicit", {}).get("accuracy")
+        if isinstance(_im, (int, float)) and isinstance(_ex, (int, float)):
+            _win = 1 if _im > _ex else 2
+            _style.append(("FONTNAME", (_win,_i), (_win,_i), "Helvetica-Bold"))
+        for _c, _v in ((1,_im), (2,_ex)):
+            if isinstance(_v, (int, float)) and _v < 0.5:
+                _style.append(("TEXTCOLOR", (_c,_i), (_c,_i), colors.HexColor("#b00020")))
+    t5.setStyle(TableStyle(_style))
+    story += [t5, P("<i>Bold = better of the two scorers on that set. Red = below chance (0.500). "
+                    "Ties count as 0.5.</i>", SMALL)]
+
+    _id_im = EVAL.get("UltraFeedback (ID)", {}).get("implicit", {}).get("accuracy")
+    _id_ex = EVAL.get("UltraFeedback (ID)", {}).get("explicit", {}).get("accuracy")
+    _ood = [k for k in _sets if "OOD" in k]
+    _im_wins = sum(1 for k in _ood
+                   if EVAL[k].get("implicit", {}).get("accuracy", 0) > EVAL[k].get("explicit", {}).get("accuracy", 0))
+
+    story += [P("Interpretation", H2)]
+    story += [bullets([
+        f"<b>H1 is supported.</b> In distribution the explicit RM is the better preference classifier: "
+        f"{_id_ex:.3f} vs {_id_im:.3f} on held-out UltraFeedback, a gap that is statistically significant "
+        "under McNemar. Training a reward head directly on the preference objective does buy accuracy "
+        "on the distribution it was fit to.",
+        f"<b>H2 is contradicted &mdash; the gap does not widen under shift, it reverses.</b> The implicit "
+        f"reward is the better scorer on {_im_wins} of the {len(_ood)} out-of-distribution sets. The "
+        "explicit RM wins only on RewardBench-Chat, the subset stylistically closest to UltraFeedback, "
+        "and falls <b>below chance</b> on Chat-Hard, Reasoning and HH-harmless. On this evidence the "
+        "DPO policy is the <i>more</i> transferable reward model, the opposite of what we predicted.",
+        "<b>A below-chance scorer is a finding that demands a second look, not a result to report as is.</b> "
+        "Systematically worse than random means the ordering is being actively inverted. The plausible "
+        "mechanism is length: the explicit RM appears to proxy response length, and Chat-Hard is "
+        "constructed to invert the length cue (pick-longer scores "
+        f"{res['RewardBench: Chat-Hard (OOD)']['pick_longer']:.3f} there). We will confirm this against the "
+        "length-controlled metric before treating it as a property of BT reward models rather than a defect.",
+        "<b>Part of the implicit reward&rsquo;s OOD strength may not be preference learning at all.</b> On "
+        f"Reasoning the free base log-probability baseline already reaches "
+        f"{EVAL['RewardBench:Reasoning (OOD)']['base_logprob']['accuracy']:.3f}, close to the implicit "
+        f"reward&rsquo;s {EVAL['RewardBench:Reasoning (OOD)']['implicit']['accuracy']:.3f}. Much of that "
+        "column may reflect the base model&rsquo;s fluency rather than anything DPO learned &mdash; which "
+        "is exactly why the log-prob baseline is reported alongside.",
+    ])]
+    story += [P("<b>These numbers are provisional.</b> They are a single seed at 0.5B with the pair-count "
+                "caveat above, and the study design calls for &ge;3 seeds with confidence intervals before "
+                "any headline claim. They are reported here as the first end-to-end signal from the "
+                "pipeline, not as a settled result.", SMALL)]
+
 # ------------------------------------------------------------------ 4. Challenges
 story += [P("4&nbsp;&nbsp;Challenges", H1)]
 story += [bullets([
@@ -363,16 +451,27 @@ story += [bullets([
 
 # ------------------------------------------------------------------ 5. Next steps
 story += [P("5&nbsp;&nbsp;Next Steps", H1)]
-story += [bullets([
+_next = ([
+    "<b>Immediate &mdash; explain the below-chance explicit RM.</b> Check its accuracy on length-matched "
+    "pairs against the length-only baseline. If the length-proxy account holds, this becomes a substantive "
+    "result about what BT reward models latch onto; if it does not, it points at a defect in the scalar "
+    "head that must be fixed before any comparison stands.",
+    "<b>Restore an exact compute match.</b> Pre-filter both conditions to a common length-eligible subset "
+    "so the RM and DPO see byte-identical pairs, then re-run the 8k budget.",
+    "Repeat the headline configuration across &ge;3 seeds and attach confidence intervals; the current "
+    "numbers are a single seed and cannot carry a claim on their own.",
+] if EVAL else [
     "<b>Immediate.</b> Finish DPO (&beta;=0.1) and the BT reward model at the 8k budget from the shared "
     "&pi;<sub>ref</sub>, then run the evaluation harness to produce the first H1/H2 numbers "
     "(implicit vs explicit, ID + OOD) against the reference floors in Section 3.1.",
     "Re-run the implicit-reward cross-check on the trained checkpoints, where the rewards are far from "
     "zero and the comparison is most informative.",
+]) + [
     "Widen to the ablations: &beta; &isin; {0.05, 0.1, 0.3, 0.5}, budget &isin; {2k, 8k, 32k}, and the "
     "training-progress checkpoint curve (overoptimization).",
     "Add the gold-judge OOD set and Spearman correlation; finalize with &ge;3 seeds and significance tests.",
-])]
+]
+story += [bullets(_next)]
 story += [Spacer(1, 4), HRFlowable(width="100%", color=colors.HexColor("#c9c9c9")),
           P("Code, benchmark data pipeline, and reproducible baseline results: "
             "github.com/silvererudite/dpo-implicit-reward", SMALL)]
