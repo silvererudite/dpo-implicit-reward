@@ -1,0 +1,18 @@
+# Explicit Bradley-Terry reward model. Compute matched to DPO. Sweep --budget {2k,8k,32k}.
+base_model: Qwen/Qwen2.5-0.5B
+sft_dir: outputs/sft                    # same start as DPO (identical initial weights)
+output_root: outputs
+
+# identical LoRA + optimization budget as DPO
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+epochs: 1
+batch_size: 4
+grad_accum: 4
+lr: 5.0e-5
+max_length: 1024
+seed: 0
+report_to: none

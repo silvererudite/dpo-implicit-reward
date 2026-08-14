@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Data / model artifacts (regenerated; keep out of git)
+data/*.arrow
+data/*.parquet
+data/cache/
+checkpoints/
+outputs/
+wandb/
+*.bin
+*.safetensors
+
+# HF datasets/transformers cache
+.cache/
+
+# Results: keep JSON summaries, ignore large dumps
+results/*.parquet
+results/raw_scores/
+
+# OS
+.DS_Store

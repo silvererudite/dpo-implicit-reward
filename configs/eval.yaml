@@ -1,0 +1,9 @@
+# Evaluate implicit vs explicit (+ base_logprob) on ID + OOD benchmarks.
+base_model: Qwen/Qwen2.5-0.5B
+sft_dir: outputs/sft
+dpo_dir: outputs/dpo_beta0.1_8k          # policy whose implicit reward we read off
+rm_dir: outputs/rm_8k                    # explicit reward model
+beta: 0.1
+device: cuda
+test_limit: null                         # null = full test sets
+tag: beta0.1_8k

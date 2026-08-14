@@ -1,0 +1,18 @@
+# SFT reference policy (pi_ref). Shared start for DPO and the explicit RM.
+base_model: Qwen/Qwen2.5-0.5B          # fallback: EleutherAI/pythia-410m
+budget: 32k                             # SFT on the full pool once
+output_dir: outputs/sft
+
+# LoRA (identical across SFT / DPO / RM for a fair comparison)
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+epochs: 1
+batch_size: 8
+grad_accum: 2
+lr: 2.0e-4
+max_length: 1024
+seed: 0
+report_to: none
