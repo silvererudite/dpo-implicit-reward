@@ -36,7 +36,9 @@ def main(cfg):
         gradient_accumulation_steps=cfg["grad_accum"],
         learning_rate=cfg["lr"], lr_scheduler_type="cosine", warmup_ratio=0.03,
         max_length=cfg["max_length"], logging_steps=20, save_strategy="epoch",
-        bf16=True, seed=cfg["seed"], report_to=cfg.get("report_to", "none"),
+        max_steps=cfg.get("max_steps", -1),          # >0 for a quick smoke test
+        bf16=cfg.get("bf16", True), fp16=cfg.get("fp16", False),  # T4: bf16:false, fp16:true
+        seed=cfg["seed"], report_to=cfg.get("report_to", "none"),
     )
     trainer = SFTTrainer(model=model, args=args, train_dataset=train,
                          processing_class=tok, peft_config=peft_cfg)

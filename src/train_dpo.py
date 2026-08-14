@@ -43,7 +43,9 @@ def main(cfg, beta, budget):
         logging_steps=20,
         # checkpoints across training -> training-progress / overoptimization ablation
         save_strategy="steps", save_steps=cfg["save_steps"],
-        bf16=True, seed=cfg["seed"], report_to=cfg.get("report_to", "none"),
+        max_steps=cfg.get("max_steps", -1),          # >0 for a quick smoke test
+        bf16=cfg.get("bf16", True), fp16=cfg.get("fp16", False),  # T4: bf16:false, fp16:true
+        seed=cfg["seed"], report_to=cfg.get("report_to", "none"),
     )
     # ref_model=None => TRL uses the frozen base of the PEFT model as pi_ref (LoRA disabled).
     trainer = DPOTrainer(model=policy, ref_model=None, args=args,

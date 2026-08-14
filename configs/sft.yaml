@@ -16,3 +16,5 @@ lr: 2.0e-4
 max_length: 1024
 seed: 0
 report_to: none
+bf16: true          # Ampere (g5/A10G, A100). On a T4 set bf16:false, fp16:true
+fp16: false

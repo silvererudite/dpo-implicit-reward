@@ -1,0 +1,24 @@
+# Smoke test: validate the full stack (model load, LoRA, TRL trainer, save/reload) in ~20 steps.
+# Run FIRST on a new GPU box before committing real compute:
+#   python -m src.train_sft --config configs/smoke.yaml
+base_model: Qwen/Qwen2.5-0.5B
+budget: 2k                              # loads the smallest subset; max_steps caps the run anyway
+output_dir: outputs/smoke
+
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+epochs: 1
+max_steps: 20                           # <-- stop after 20 steps
+batch_size: 4
+grad_accum: 1
+lr: 2.0e-4
+max_length: 512
+seed: 0
+report_to: none
+
+# Precision: bf16 on Ampere (g5/A10G, A100). On a T4 (g4dn) flip these:
+bf16: true
+fp16: false
