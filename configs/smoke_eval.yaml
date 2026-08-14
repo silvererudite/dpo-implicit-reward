@@ -1,0 +1,10 @@
+# Smoke: tiny eval to validate the scoring/metrics harness end to end.
+base_model: Qwen/Qwen2.5-0.5B
+sft_merged_dir: outputs/smoke_merged
+dpo_dir: outputs/smoke_run/dpo_beta0.1_2k
+rm_dir: outputs/smoke_run/rm_2k
+beta: 0.1
+device: cuda
+bf16: true
+test_limit: 8
+tag: smoke

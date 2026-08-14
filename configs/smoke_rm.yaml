@@ -1,0 +1,19 @@
+# Smoke: 20 RM steps on the merged smoke checkpoint. Validates the RM code path only.
+base_model: Qwen/Qwen2.5-0.5B
+sft_merged_dir: outputs/smoke_merged
+output_root: outputs/smoke_run
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+epochs: 1
+max_steps: 20
+batch_size: 2
+grad_accum: 2
+lr: 5.0e-5
+max_length: 512
+seed: 0
+report_to: none
+gradient_checkpointing: true
+bf16: true
+fp16: false

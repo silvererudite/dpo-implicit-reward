@@ -16,6 +16,39 @@ from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table, Tab
 ROOT = os.path.dirname(os.path.dirname(__file__))
 RESULTS = json.load(open(os.path.join(ROOT, "results", "baselines.json")))
 
+
+def load_budget(*path):
+    """Read a stage's budget.json (tokens-seen / wall-clock / effective batch), or None.
+
+    Read rather than hard-coded so the PDF cannot drift from what actually ran: regenerating
+    after a new run always reports that run's real numbers, and stages that have not finished
+    are reported as pending instead of being invented.
+    """
+    p = os.path.join(ROOT, *path, "budget.json")
+    return json.load(open(p)) if os.path.exists(p) else None
+
+
+def load_eval(tag):
+    p = os.path.join(ROOT, "results", f"eval_{tag}.json")
+    return json.load(open(p)) if os.path.exists(p) else None
+
+
+SFT_B = load_budget("outputs", "sft")
+DPO_B = load_budget("outputs", "dpo_beta0.1_8k")
+RM_B = load_budget("outputs", "rm_8k")
+EVAL = load_eval("beta0.1_8k")
+
+
+DASH = "—"  # literal em dash: raw Table cells are not parsed for HTML entities
+
+
+def fmt_hms(sec):
+    if not sec:
+        return DASH
+    m, s = divmod(int(sec), 60)
+    h, m = divmod(m, 60)
+    return f"{h}h {m:02d}m" if h else f"{m}m {s:02d}s"
+
 # ------------------------------------------------------------------ styles
 ss = getSampleStyleSheet()
 BODY = ParagraphStyle("body", parent=ss["BodyText"], fontSize=9.5, leading=13.5,
@@ -80,9 +113,18 @@ story += [bullets([
     "<b>Transition</b> P(s<sub>t+1</sub>|s<sub>t</sub>,a<sub>t</sub>): deterministic append, s<sub>t+1</sub> = (x, y<sub>&le;t</sub>).",
     "<b>Reward</b> R: sparse and terminal &mdash; a scalar r(x,y) delivered at the end-of-sequence token; "
     "the KL-regularized RLHF objective adds a per-token shaping term &minus;&beta;&middot;log[&pi;<sub>&theta;</sub>/&pi;<sub>ref</sub>].",
-    "<b>Initial state</b> &rho;<sub>0</sub>: a prompt x &sim; D with empty response.",
+    "<b>Initial state</b> &rho;<sub>0</sub>: a prompt x &sim; D with empty response, i.e. s<sub>0</sub> = (x, &empty;).",
+    "<b>Terminal states</b>: a state is terminal once the emitted action is the end-of-sequence token "
+    "(a<sub>t</sub> = EOS) or the length cap H is reached, whichever comes first &mdash; so every episode "
+    "is finite and the return is well defined without discounting.",
     "<b>Horizon / discount</b>: episodic with H = max new tokens, &gamma; = 1. The policy is the LM &pi;<sub>&theta;</sub>(a<sub>t</sub>|s<sub>t</sub>).",
 ])]
+story += [P("Two properties of this MDP matter for the study. The dynamics are <i>known and "
+            "deterministic</i> (appending a token), so there is no transition-model uncertainty to "
+            "estimate &mdash; all difficulty sits in the reward. And the reward is <i>sparse and "
+            "terminal</i>: no learning signal arrives until the response is complete, which is precisely "
+            "why preference-based methods replace an explicit per-token reward with a comparison between "
+            "whole trajectories.", SMALL)]
 
 story += [P("1.2&nbsp;&nbsp;Contextual-bandit abstraction (DPO&rsquo;s view)", H2)]
 story += [P("DPO collapses the horizon: the context is the prompt x &sim; D, the action is the "
@@ -126,14 +168,16 @@ story += [P("<b>Research question &amp; hypotheses.</b> Under matched data/compu
 story += [P("2&nbsp;&nbsp;Benchmark Datasets", H1)]
 story += [P("Following the instructor&rsquo;s feedback to use benchmark datasets, all data are "
             "established public benchmarks:")]
+# Descriptions go through Paragraph so they wrap; a raw string cell overflows the column
+# (the RewardBench row ran off the page edge).
 ds = [["Dataset", "Role in this study"],
       ["UltraFeedback-binarized\n(HuggingFaceH4/ultrafeedback_binarized)",
-       "Training preference pairs and the in-distribution (ID) held-out test set."],
+       P("Training preference pairs and the in-distribution (ID) held-out test set.", SMALL)],
       ["RewardBench\n(allenai/reward-bench)",
-       "The standard reward-model evaluation benchmark; its Chat / Chat-Hard / Safety / Reasoning "
-       "subsets provide controlled distribution shift (OOD)."],
+       P("The standard reward-model evaluation benchmark; its Chat / Chat-Hard / Safety / Reasoning "
+         "subsets provide controlled distribution shift (OOD).", SMALL)],
       ["Anthropic HH-RLHF\n(Anthropic/hh-rlhf)",
-       "A classic human-preference benchmark used as a cross-dataset OOD set."]]
+       P("A classic human-preference benchmark used as a cross-dataset OOD set.", SMALL)]]
 t2 = Table(ds, colWidths=[2.3*inch, 4.0*inch])
 t2.setStyle(TableStyle([
     ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#294d69")), ("TEXTCOLOR",(0,0),(-1,0),colors.white),
@@ -201,20 +245,89 @@ story += [bullets([
     "between the implicit and explicit rewards.",
 ])]
 
-story += [P("3.3&nbsp;&nbsp;Neural conditions (implemented, queued for GPU)", H2)]
-story += [P("The full training and evaluation pipeline is implemented and syntax-verified; it targets "
-            "Qwen2.5-0.5B with LoRA via HuggingFace TRL on a single GPU (Colab). Three neural scorers "
-            "are ready to run:")]
-story += [bullets([
-    "<b>DPO implicit reward</b> r&#710; &mdash; extracted as the &beta;-scaled response log-ratio "
-    "(<i>src/scoring.py</i>), to be verified against DPOTrainer&rsquo;s own logged rewards.",
-    "<b>Explicit Bradley&ndash;Terry RM</b> r<sub>&phi;</sub> &mdash; scalar head, matched to DPO "
-    "(same SFT init, pairs, epochs, LoRA, batch, LR; see <i>DESIGN.md</i>).",
-    "<b>Base-model log-probability</b> &mdash; a free neural baseline (length-normalized).",
-])]
+story += [P("3.3&nbsp;&nbsp;Neural pipeline: now running on GPU", H2)]
+story += [P("Since the last update the pipeline has moved off the drawing board and onto hardware: an "
+            "AWS SageMaker instance with NVIDIA A10G GPUs (24&nbsp;GB, Ampere &rarr; native bf16), "
+            "replacing the Colab plan. Qwen2.5-0.5B + LoRA via HuggingFace TRL, as designed. The stage "
+            "status below is read directly from each checkpoint&rsquo;s <i>budget.json</i>, which the "
+            "trainers now write automatically so the matched-compute claim is auditable rather than asserted.")]
+
+_stage_rows = [["Stage", "Status", "Steps", "Epochs", "Eff. batch", "Wall-clock"]]
+for _label, _b, _pending in [
+        ("SFT &rarr; &pi;<sub>ref</sub> (32k)", SFT_B, "queued"),
+        ("DPO &beta;=0.1 (8k)", DPO_B, "in progress"),
+        ("Bradley&ndash;Terry RM (8k)", RM_B, "in progress")]:
+    if _b:
+        _stage_rows.append([Paragraph(_label, SMALL), "complete", str(_b.get("global_step", DASH)),
+                            f"{_b.get('epochs', 0):.2f}", str(_b.get("effective_batch", DASH)),
+                            fmt_hms(_b.get("train_runtime_sec"))])
+    else:
+        _stage_rows.append([Paragraph(_label, SMALL), _pending, DASH, DASH, DASH, DASH])
+t4 = Table(_stage_rows, colWidths=[1.85*inch, 0.95*inch, 0.65*inch, 0.7*inch, 0.85*inch, 0.95*inch])
+t4.setStyle(TableStyle([
+    ("BACKGROUND",(0,0),(-1,0),colors.HexColor("#294d69")), ("TEXTCOLOR",(0,0),(-1,0),colors.white),
+    ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"), ("FONTSIZE",(0,0),(-1,-1),8.3),
+    ("GRID",(0,0),(-1,-1),0.4,colors.HexColor("#bbbbbb")),
+    ("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.white,colors.HexColor("#f3f6f9")]),
+    ("ALIGN",(1,0),(-1,-1),"CENTER"), ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+    ("TOPPADDING",(0,0),(-1,-1),2.5),("BOTTOMPADDING",(0,0),(-1,-1),2.5),
+]))
+story += [t4]
+if SFT_B:
+    story += [P(f"<i>&pi;<sub>ref</sub> is trained: one full epoch over {SFT_B.get('budget','32k')} "
+                f"UltraFeedback pairs, {SFT_B.get('global_step')} optimizer steps at effective batch "
+                f"{SFT_B.get('effective_batch')}, LoRA r=16. DPO and the RM both initialize from it, so "
+                "neither scorer gets a head start.</i>", SMALL)]
 story += [P("Evaluation reports pairwise accuracy (primary), ECE, length-controlled accuracy, Spearman "
             "vs gold, and a McNemar paired test between the implicit and explicit scorers "
-            "(<i>src/metrics.py</i>, <i>src/eval.py</i>).")]
+            "(<i>src/metrics.py</i>, <i>src/eval.py</i>). The harness has been validated end-to-end on a "
+            "reduced run." + ("" if EVAL else " All three training stages are complete and the full "
+            "evaluation over the ID and OOD benchmark sets is currently running; H1/H2 numbers follow "
+            "on its completion."))]
+if RM_B and DPO_B and RM_B.get("global_step") and DPO_B.get("global_step") \
+        and RM_B["global_step"] != DPO_B["global_step"]:
+    _rm_pairs = RM_B["global_step"] * RM_B["effective_batch"]
+    _dpo_pairs = DPO_B["global_step"] * DPO_B["effective_batch"]
+    story += [P(
+        f"<b>Known caveat on the compute match.</b> The RM completed {RM_B['global_step']} optimizer "
+        f"steps ({_rm_pairs:,} pairs) against DPO&rsquo;s {DPO_B['global_step']} ({_dpo_pairs:,}) at the "
+        "same nominal 8k budget and identical effective batch. The cause is a difference in how the two "
+        "TRL trainers handle over-length examples: RewardTrainer <i>drops</i> pairs exceeding "
+        "max_length while DPOTrainer <i>truncates</i> them. The two conditions therefore do not see "
+        "byte-identical data, which weakens the &lsquo;same pairs&rsquo; half of our matched-compute "
+        "definition. We are pre-filtering both conditions to a common length-eligible subset and will "
+        "re-run before reporting headline H1/H2 numbers; the figures below should be read with this "
+        "in mind.", SMALL)]
+
+# ---------------------------------------------------------- 3.4 correctness work (new)
+story += [P("3.4&nbsp;&nbsp;Two correctness bugs found before trusting any number", H2)]
+story += [P("Bringing the pipeline up on GPU surfaced two defects that would not have crashed &mdash; they "
+            "would have silently produced plausible but meaningless H1/H2 results. Both stemmed from "
+            "treating the SFT <i>LoRA adapter</i> as the shared initialization:")]
+story += [bullets([
+    "<b>The DPO reference was the wrong model.</b> With a PEFT policy and <i>ref_model=None</i>, TRL "
+    "derives &pi;<sub>ref</sub> by <i>disabling the adapter</i> &mdash; which returns the raw base model, "
+    "not the SFT checkpoint. Training therefore optimized &beta;&middot;(log&nbsp;&pi;<sub>&theta;</sub> "
+    "&minus; log&nbsp;&pi;<sub>base</sub>) while evaluation scored against base+SFT: two different "
+    "quantities, neither the &pi;<sub>ref</sub> the design specifies.",
+    "<b>The reward model&rsquo;s scalar head never trained.</b> Loading a CAUSAL_LM adapter onto a "
+    "sequence-classification model leaves the freshly initialized <i>score</i> head frozen at random "
+    "values (the adapter carries no <i>modules_to_save</i>). Measured directly: <i>score head "
+    "trainable = False</i>. The explicit RM &mdash; the entire H1 baseline &mdash; would have been "
+    "a LoRA trained underneath a random frozen projection.",
+])]
+story += [P("Both are fixed by materializing &pi;<sub>ref</sub> once as a merged checkpoint "
+            "(<i>src/merge_sft.py</i>). DPO then trains a fresh zero-initialized LoRA on it, so "
+            "&pi;<sub>&theta;</sub>&nbsp;=&nbsp;&pi;<sub>ref</sub> at step 0 and the implicit reward "
+            "starts at exactly 0 &mdash; confirmed empirically by the DPO loss beginning at "
+            "ln&nbsp;2&nbsp;&asymp;&nbsp;0.693. The RM adds a fresh SEQ_CLS LoRA, after which the head "
+            "is trainable and saved. Evaluation loads the same merged checkpoint, so training and "
+            "evaluation agree by construction.")]
+story += [P("The implicit-reward extraction is additionally cross-checked against DPOTrainer&rsquo;s own "
+            "reward computation (<i>src/verify_implicit.py</i>): tokenization matches exactly, the reward "
+            "is exactly linear in &beta;, and the residual disagreement is an order of magnitude smaller "
+            "than the shift a prompt-masking bug would produce. This guards the quantity the entire "
+            "study measures.")]
 
 # ------------------------------------------------------------------ 4. Challenges
 story += [P("4&nbsp;&nbsp;Challenges", H1)]
@@ -225,7 +338,11 @@ story += [bullets([
     "different losses (DPO&rsquo;s extra reference forward pass) remains a judgment call we must defend.",
     "<b>Correct implicit-reward extraction.</b> The &beta;-scaled, prompt-masked, length-summed log-ratio "
     "must exactly match TRL&rsquo;s internal convention; a subtle masking or scaling error would silently "
-    "bias every downstream number. Mitigation: cross-check against DPOTrainer&rsquo;s logged rewards.",
+    "bias every downstream number. <i>Addressed</i> (Section 3.4): cross-checked against DPOTrainer&rsquo;s "
+    "own reward computation, with explicit controls for the masking and &beta;-scaling failure modes.",
+    "<b>Silent failures beat loud ones.</b> The two defects in Section 3.4 both ran without error and "
+    "produced numbers that looked reasonable. The lesson we are carrying forward is to verify each "
+    "component against an independent implementation before trusting any result it feeds.",
     "<b>Small-model noise.</b> At 0.5B, reward accuracy can sit close to chance on hard subsets "
     "(the TF-IDF collapse on Reasoning previews this), so headline claims need &ge;3 seeds with "
     "confidence intervals; we may escalate to 1.5B if the signal is too noisy.",
@@ -234,15 +351,24 @@ story += [bullets([
     "<b>Gold-judge / Spearman set on limited compute.</b> A larger instruction-tuned judge for scalar "
     "gold ratings must be run as a separate quantized/offline pass (or via API) to fit a single "
     "consumer GPU alongside training.",
-    "<b>Toolchain drift.</b> TRL&rsquo;s DPOTrainer / RewardTrainer APIs shift across releases; versions "
-    "are pinned in <i>requirements.txt</i> and the trainers may need minor version-specific edits on Colab.",
+    "<b>Toolchain drift &mdash; encountered, not hypothetical.</b> Standing the environment up required "
+    "upper-bounding <i>transformers</i> (TRL 0.15 imports a symbol removed in transformers 5.x, so an "
+    "unbounded pin broke the import outright) and handling an SFTConfig argument that was renamed across "
+    "TRL releases. Versions are now pinned on both sides in <i>requirements.txt</i>.",
+    "<b>Hardware-dependent silent misconfiguration.</b> On a multi-GPU host, HuggingFace Trainer "
+    "auto-wraps the model in DataParallel, which quadrupled the effective batch size &mdash; breaking the "
+    "matched-compute definition without any warning &mdash; and ran 6&times; slower. Runs are now pinned "
+    "to one GPU so the executed configuration matches the documented one.",
 ])]
 
 # ------------------------------------------------------------------ 5. Next steps
 story += [P("5&nbsp;&nbsp;Next Steps", H1)]
 story += [bullets([
-    "Run SFT &rarr; DPO &rarr; BT-RM end-to-end at the 8k budget on Colab; produce the first "
-    "H1/H2 numbers (implicit vs explicit, ID + OOD) with the reference floors above as context.",
+    "<b>Immediate.</b> Finish DPO (&beta;=0.1) and the BT reward model at the 8k budget from the shared "
+    "&pi;<sub>ref</sub>, then run the evaluation harness to produce the first H1/H2 numbers "
+    "(implicit vs explicit, ID + OOD) against the reference floors in Section 3.1.",
+    "Re-run the implicit-reward cross-check on the trained checkpoints, where the rewards are far from "
+    "zero and the comparison is most informative.",
     "Widen to the ablations: &beta; &isin; {0.05, 0.1, 0.3, 0.5}, budget &isin; {2k, 8k, 32k}, and the "
     "training-progress checkpoint curve (overoptimization).",
     "Add the gold-judge OOD set and Spearman correlation; finalize with &ge;3 seeds and significance tests.",

@@ -32,7 +32,9 @@ def eval_sets(test_limit=None):
     for e in rb:
         by_cat[rewardbench_category(e["subset"])].append(e)
     for cat, exs in by_cat.items():
-        sets[f"RewardBench:{cat} (OOD)"] = exs
+        # test_limit caps every set, RewardBench included -- otherwise a "quick" eval still
+        # scores all ~3k RewardBench pairs and there is no way to smoke-test the harness.
+        sets[f"RewardBench:{cat} (OOD)"] = exs[:test_limit] if test_limit else exs
     sets["HH-harmless (OOD)"] = load_hh(subset="harmless-base", split="test", limit=test_limit)
     return sets
 
