@@ -16,15 +16,24 @@ from peft import LoraConfig, PeftModel
 from trl import DPOTrainer, DPOConfig
 
 from src.prepare import build_budget_subsets, to_dpo
+from src.runtime import model_dtype, wandb_setup, log_budget
 
 
 def load_sft_policy(cfg):
-    """Load base + SFT LoRA adapter as the starting policy (and, frozen, as the reference)."""
+    """Load the MERGED SFT checkpoint (pi_ref) as the policy backbone.
+
+    Must be the merged checkpoint, not base + SFT adapter: with a PEFT model and
+    ref_model=None, TRL derives pi_ref by disabling the adapter. On base+SFT-adapter that
+    yields the raw base model; on the merged checkpoint it yields the SFT policy, which is
+    the pi_ref DESIGN.md specifies and the one src/eval.py scores against. A fresh
+    zero-init DPO LoRA is attached by DPOTrainer via peft_config, so pi_theta == pi_ref at
+    step 0 and the implicit reward starts at exactly 0. See src/merge_sft.py.
+    """
     tok = AutoTokenizer.from_pretrained(cfg["base_model"])
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
-    base = AutoModelForCausalLM.from_pretrained(cfg["base_model"])
-    policy = PeftModel.from_pretrained(base, cfg["sft_dir"], is_trainable=True)
+    policy = AutoModelForCausalLM.from_pretrained(
+        cfg["sft_merged_dir"], torch_dtype=model_dtype(cfg))
     return policy, tok
 
 
@@ -32,6 +41,7 @@ def main(cfg, beta, budget):
     policy, tok = load_sft_policy(cfg)
     train = to_dpo(build_budget_subsets("train_prefs")[budget])
 
+    run = f"dpo-beta{beta}-{budget}-seed{cfg['seed']}"
     args = DPOConfig(
         output_dir=f"{cfg['output_root']}/dpo_beta{beta}_{budget}",
         beta=beta,
@@ -45,13 +55,22 @@ def main(cfg, beta, budget):
         save_strategy="steps", save_steps=cfg["save_steps"],
         max_steps=cfg.get("max_steps", -1),          # >0 for a quick smoke test
         bf16=cfg.get("bf16", True), fp16=cfg.get("fp16", False),  # T4: bf16:false, fp16:true
-        seed=cfg["seed"], report_to=cfg.get("report_to", "none"),
+        gradient_checkpointing=cfg.get("gradient_checkpointing", False),
+        gradient_checkpointing_kwargs={"use_reentrant": False},
+        seed=cfg["seed"], run_name=run,
+        report_to=wandb_setup(cfg, run),
     )
-    # ref_model=None => TRL uses the frozen base of the PEFT model as pi_ref (LoRA disabled).
+    # Fresh DPO adapter on top of the merged SFT policy. ref_model=None => TRL disables this
+    # adapter to get pi_ref, which is now exactly the merged SFT checkpoint.
+    peft_cfg = LoraConfig(
+        r=cfg["lora_r"], lora_alpha=cfg["lora_alpha"], lora_dropout=cfg["lora_dropout"],
+        target_modules=cfg["target_modules"], task_type="CAUSAL_LM",
+    )
     trainer = DPOTrainer(model=policy, ref_model=None, args=args,
-                         train_dataset=train, processing_class=tok)
+                         train_dataset=train, processing_class=tok, peft_config=peft_cfg)
     trainer.train()
     trainer.save_model(args.output_dir)
+    log_budget(args.output_dir, trainer, "dpo", {"beta": beta, "budget": budget})
     print(f"Saved DPO policy (beta={beta}, budget={budget}) -> {args.output_dir}")
 
 

@@ -21,6 +21,7 @@ from transformers import AutoModelForCausalLM, AutoModelForSequenceClassificatio
 from peft import PeftModel
 
 from src.data import load_ultrafeedback, load_rewardbench, load_hh, rewardbench_category
+from src.runtime import model_dtype
 from src import scoring, metrics
 
 
@@ -57,22 +58,28 @@ def summarize(sc, sr, lc, lr):
 
 def main(cfg):
     device = cfg.get("device", "cuda")
+    dtype = model_dtype(cfg)
     tok = AutoTokenizer.from_pretrained(cfg["base_model"])
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
 
+    # pi_ref is the MERGED SFT checkpoint -- the same reference DPOTrainer used during training
+    # (it derives pi_ref by disabling the DPO adapter on this backbone). Scoring against
+    # base+SFT-adapter, or against raw base, would measure a different quantity than was trained.
+    ref_dir = cfg["sft_merged_dir"]
     scorers = {}
     if cfg.get("dpo_dir"):
-        base = AutoModelForCausalLM.from_pretrained(cfg["base_model"]).to(device).eval()
-        policy = PeftModel.from_pretrained(base, cfg["dpo_dir"]).to(device).eval()
-        ref = AutoModelForCausalLM.from_pretrained(cfg["base_model"]).to(device).eval()
-        if cfg.get("sft_dir"):
-            ref = PeftModel.from_pretrained(ref, cfg["sft_dir"]).to(device).eval()
+        ref = AutoModelForCausalLM.from_pretrained(
+            ref_dir, torch_dtype=dtype).to(device).eval()
+        policy_backbone = AutoModelForCausalLM.from_pretrained(
+            ref_dir, torch_dtype=dtype).to(device)
+        policy = PeftModel.from_pretrained(policy_backbone, cfg["dpo_dir"]).to(device).eval()
         beta = cfg.get("beta", 0.1)
         scorers["implicit"] = lambda p, r: scoring.implicit_reward(policy, ref, tok, p, r, beta, device)
         scorers["base_logprob"] = lambda p, r: scoring.base_logprob(ref, tok, p, r, device)
     if cfg.get("rm_dir"):
-        rmb = AutoModelForSequenceClassification.from_pretrained(cfg["base_model"], num_labels=1)
+        rmb = AutoModelForSequenceClassification.from_pretrained(
+            ref_dir, num_labels=1, torch_dtype=dtype)
         rmb.config.pad_token_id = tok.pad_token_id
         rm = PeftModel.from_pretrained(rmb, cfg["rm_dir"]).to(device).eval()
         scorers["explicit"] = lambda p, r: scoring.explicit_reward(rm, tok, p, r, device)

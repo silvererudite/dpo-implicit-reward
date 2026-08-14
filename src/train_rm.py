@@ -16,27 +16,30 @@ from peft import LoraConfig, PeftModel
 from trl import RewardTrainer, RewardConfig
 
 from src.prepare import build_budget_subsets, to_rm
+from src.runtime import model_dtype, wandb_setup, log_budget
 
 
 def main(cfg, budget):
     tok = AutoTokenizer.from_pretrained(cfg["base_model"])
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
-    # scalar head (num_labels=1) on top of the base transformer
-    base = AutoModelForSequenceClassification.from_pretrained(
-        cfg["base_model"], num_labels=1)
-    base.config.pad_token_id = tok.pad_token_id
-    # initialize the backbone from the shared SFT adapter for a fair, matched start
-    model = PeftModel.from_pretrained(base, cfg["sft_dir"], is_trainable=True) \
-        if cfg.get("sft_dir") else base
+    # Scalar head (num_labels=1) on the MERGED SFT backbone -- the same starting weights DPO
+    # uses (DESIGN.md item 1). Loading the SFT *adapter* onto a SEQ_CLS model instead would
+    # leave the freshly initialized `score` head frozen (a CAUSAL_LM adapter carries no
+    # modules_to_save), so the Bradley-Terry head would never train. See src/merge_sft.py.
+    model = AutoModelForSequenceClassification.from_pretrained(
+        cfg["sft_merged_dir"], num_labels=1, torch_dtype=model_dtype(cfg))
+    model.config.pad_token_id = tok.pad_token_id
 
-    peft_cfg = None if cfg.get("sft_dir") else LoraConfig(
+    # task_type="SEQ_CLS" makes PEFT add modules_to_save=["score"], so the head trains and is saved.
+    peft_cfg = LoraConfig(
         r=cfg["lora_r"], lora_alpha=cfg["lora_alpha"], lora_dropout=cfg["lora_dropout"],
         target_modules=cfg["target_modules"], task_type="SEQ_CLS",
     )
 
     train = to_rm(build_budget_subsets("train_prefs")[budget])
 
+    run = f"rm-{budget}-seed{cfg['seed']}"
     args = RewardConfig(
         output_dir=f"{cfg['output_root']}/rm_{budget}",
         num_train_epochs=cfg["epochs"],
@@ -46,12 +49,15 @@ def main(cfg, budget):
         max_length=cfg["max_length"], logging_steps=20, save_strategy="epoch",
         max_steps=cfg.get("max_steps", -1),          # >0 for a quick smoke test
         bf16=cfg.get("bf16", True), fp16=cfg.get("fp16", False),  # T4: bf16:false, fp16:true
-        seed=cfg["seed"], report_to=cfg.get("report_to", "none"),
+        gradient_checkpointing=cfg.get("gradient_checkpointing", False),
+        gradient_checkpointing_kwargs={"use_reentrant": False},
+        seed=cfg["seed"], run_name=run, report_to=wandb_setup(cfg, run),
     )
     trainer = RewardTrainer(model=model, args=args, train_dataset=train,
                             processing_class=tok, peft_config=peft_cfg)
     trainer.train()
     trainer.save_model(args.output_dir)
+    log_budget(args.output_dir, trainer, "rm", {"budget": budget})
     print(f"Saved explicit reward model (budget={budget}) -> {args.output_dir}")
 
 

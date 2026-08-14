@@ -11,6 +11,8 @@ data/*.parquet
 data/cache/
 checkpoints/
 outputs/
+# may be a symlink to fast local storage; "outputs/" alone won't match a symlink
+/outputs
 wandb/
 *.bin
 *.safetensors

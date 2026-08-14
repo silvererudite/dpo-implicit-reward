@@ -10,11 +10,13 @@ lora_dropout: 0.05
 target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
 
 epochs: 1
-batch_size: 8
-grad_accum: 2
+batch_size: 4
+grad_accum: 4        # effective batch 16 (= DPO/RM); 8x2 OOMs on 24GB via the 151936-vocab logits
 lr: 2.0e-4
 max_length: 1024
 seed: 0
-report_to: none
+report_to: wandb
+wandb_project: dpo-implicit-reward
+gradient_checkpointing: true
 bf16: true          # Ampere (g5/A10G, A100). On a T4 set bf16:false, fp16:true
 fp16: false

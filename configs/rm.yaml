@@ -1,6 +1,6 @@
 # Explicit Bradley-Terry reward model. Compute matched to DPO. Sweep --budget {2k,8k,32k}.
 base_model: Qwen/Qwen2.5-0.5B
-sft_dir: outputs/sft                    # same start as DPO (identical initial weights)
+sft_merged_dir: outputs/sft_merged      # same start as DPO (identical initial weights)
 output_root: outputs
 
 # identical LoRA + optimization budget as DPO
@@ -15,6 +15,8 @@ grad_accum: 4
 lr: 5.0e-5
 max_length: 1024
 seed: 0
-report_to: none
+report_to: wandb
+wandb_project: dpo-implicit-reward
+gradient_checkpointing: true
 bf16: true          # Ampere (g5/A10G, A100). On a T4 set bf16:false, fp16:true
 fp16: false

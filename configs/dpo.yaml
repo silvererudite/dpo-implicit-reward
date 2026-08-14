@@ -1,9 +1,14 @@
 # DPO policy pi_theta -> implicit reward. Sweep --beta {0.05,0.1,0.3,0.5} and --budget {2k,8k,32k}.
 base_model: Qwen/Qwen2.5-0.5B
-sft_dir: outputs/sft                    # start from the shared reference policy
+sft_merged_dir: outputs/sft_merged      # merged pi_ref (see src/merge_sft.py)
 output_root: outputs
 
 # match SFT/RM LoRA + optimization for budget-matched comparison
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
 epochs: 1
 batch_size: 4
 grad_accum: 4
@@ -12,6 +17,8 @@ max_length: 1024
 max_prompt_length: 512
 save_steps: 250                         # intermediate checkpoints -> training-progress ablation
 seed: 0
-report_to: none
+report_to: wandb
+wandb_project: dpo-implicit-reward
+gradient_checkpointing: true
 bf16: true          # Ampere (g5/A10G, A100). On a T4 set bf16:false, fp16:true
 fp16: false
