@@ -18,3 +18,4 @@ accelerate>=1.0
 bitsandbytes>=0.43       # 4-bit for the larger gold judge, if used
 scipy>=1.11              # Spearman, McNemar
 wandb                    # optional experiment logging
+matplotlib>=3.8          # result figures (reports/figures/)

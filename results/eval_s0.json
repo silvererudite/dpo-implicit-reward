@@ -1,0 +1,128 @@
+{
+  "UltraFeedback (ID)": {
+    "implicit": {
+      "accuracy": 0.6259,
+      "ece": 0.3138,
+      "len_controlled_acc": 0.5724,
+      "len_controlled_n": 442
+    },
+    "base_logprob": {
+      "accuracy": 0.5383,
+      "ece": 0.3673,
+      "len_controlled_acc": 0.5294,
+      "len_controlled_n": 442
+    },
+    "explicit": {
+      "accuracy": 0.6983,
+      "ece": 0.2823,
+      "len_controlled_acc": 0.6652,
+      "len_controlled_n": 442
+    },
+    "_mcnemar_p_impl_vs_expl": 0.0
+  },
+  "RewardBench:Chat (OOD)": {
+    "implicit": {
+      "accuracy": 0.7709,
+      "ece": 0.2963,
+      "len_controlled_acc": 0.8125,
+      "len_controlled_n": 32
+    },
+    "base_logprob": {
+      "accuracy": 0.6006,
+      "ece": 0.3941,
+      "len_controlled_acc": 0.5,
+      "len_controlled_n": 32
+    },
+    "explicit": {
+      "accuracy": 0.9106,
+      "ece": 0.2204,
+      "len_controlled_acc": 0.6875,
+      "len_controlled_n": 32
+    },
+    "_mcnemar_p_impl_vs_expl": 0.0
+  },
+  "RewardBench:Chat-Hard (OOD)": {
+    "implicit": {
+      "accuracy": 0.5088,
+      "ece": 0.3495,
+      "len_controlled_acc": 0.5806,
+      "len_controlled_n": 62
+    },
+    "base_logprob": {
+      "accuracy": 0.4408,
+      "ece": 0.3443,
+      "len_controlled_acc": 0.6613,
+      "len_controlled_n": 62
+    },
+    "explicit": {
+      "accuracy": 0.3838,
+      "ece": 0.3048,
+      "len_controlled_acc": 0.5887,
+      "len_controlled_n": 62
+    },
+    "_mcnemar_p_impl_vs_expl": 1e-05
+  },
+  "RewardBench:Safety (OOD)": {
+    "implicit": {
+      "accuracy": 0.5959,
+      "ece": 0.3489,
+      "len_controlled_acc": 0.5301,
+      "len_controlled_n": 83
+    },
+    "base_logprob": {
+      "accuracy": 0.5324,
+      "ece": 0.3426,
+      "len_controlled_acc": 0.5301,
+      "len_controlled_n": 83
+    },
+    "explicit": {
+      "accuracy": 0.5946,
+      "ece": 0.3216,
+      "len_controlled_acc": 0.5783,
+      "len_controlled_n": 83
+    },
+    "_mcnemar_p_impl_vs_expl": 1.0
+  },
+  "RewardBench:Reasoning (OOD)": {
+    "implicit": {
+      "accuracy": 0.7987,
+      "ece": 0.4004,
+      "len_controlled_acc": 0.8524,
+      "len_controlled_n": 908
+    },
+    "base_logprob": {
+      "accuracy": 0.7338,
+      "ece": 0.4515,
+      "len_controlled_acc": 0.9064,
+      "len_controlled_n": 908
+    },
+    "explicit": {
+      "accuracy": 0.5793,
+      "ece": 0.4459,
+      "len_controlled_acc": 0.6812,
+      "len_controlled_n": 908
+    },
+    "_mcnemar_p_impl_vs_expl": 0.0
+  },
+  "HH-harmless (OOD)": {
+    "implicit": {
+      "accuracy": 0.5195,
+      "ece": 0.3631,
+      "len_controlled_acc": 0.4746,
+      "len_controlled_n": 276
+    },
+    "base_logprob": {
+      "accuracy": 0.4511,
+      "ece": 0.3443,
+      "len_controlled_acc": 0.4348,
+      "len_controlled_n": 276
+    },
+    "explicit": {
+      "accuracy": 0.4552,
+      "ece": 0.3539,
+      "len_controlled_acc": 0.4511,
+      "len_controlled_n": 276
+    },
+    "_mcnemar_p_impl_vs_expl": 0.0
+  }
+}

@@ -39,11 +39,13 @@ def load_sft_policy(cfg):
 
 def main(cfg, beta, budget):
     policy, tok = load_sft_policy(cfg)
-    train = to_dpo(build_budget_subsets("train_prefs")[budget])
+    # Same length-eligible pool the RM uses, so both conditions train on identical pairs.
+    train = to_dpo(build_budget_subsets("train_prefs", tok, cfg["max_length"],
+                                        cfg["max_prompt_length"])[budget])
 
     run = f"dpo-beta{beta}-{budget}-seed{cfg['seed']}"
     args = DPOConfig(
-        output_dir=f"{cfg['output_root']}/dpo_beta{beta}_{budget}",
+        output_dir=f"{cfg['output_root']}/dpo_beta{beta}_{budget}_s{cfg['seed']}",
         beta=beta,
         num_train_epochs=cfg["epochs"],
         per_device_train_batch_size=cfg["batch_size"],
@@ -79,5 +81,9 @@ if __name__ == "__main__":
     ap.add_argument("--config", required=True)
     ap.add_argument("--beta", type=float, default=0.1)
     ap.add_argument("--budget", default="8k", choices=["2k", "8k", "32k"])
+    ap.add_argument("--seed", type=int, default=None, help="override cfg seed (multi-seed runs)")
     a = ap.parse_args()
-    main(yaml.safe_load(open(a.config)), a.beta, a.budget)
+    _cfg = yaml.safe_load(open(a.config))
+    if a.seed is not None:
+        _cfg["seed"] = a.seed
+    main(_cfg, a.beta, a.budget)

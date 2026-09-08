@@ -111,5 +111,15 @@ def main(cfg):
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
+    # Overrides so one config serves every seed in a multi-seed run.
+    ap.add_argument("--dpo-dir", default=None)
+    ap.add_argument("--rm-dir", default=None)
+    ap.add_argument("--tag", default=None)
+    ap.add_argument("--test-limit", type=int, default=None)
     a = ap.parse_args()
-    main(yaml.safe_load(open(a.config)))
+    _cfg = yaml.safe_load(open(a.config))
+    for _k, _v in (("dpo_dir", a.dpo_dir), ("rm_dir", a.rm_dir), ("tag", a.tag),
+                   ("test_limit", a.test_limit)):
+        if _v is not None:
+            _cfg[_k] = _v
+    main(_cfg)

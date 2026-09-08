@@ -14,6 +14,7 @@ batch_size: 4
 grad_accum: 4
 lr: 5.0e-5
 max_length: 1024
+max_prompt_length: 512    # MUST equal dpo.yaml: both filter to the same length-eligible pool
 seed: 0
 report_to: wandb
 wandb_project: dpo-implicit-reward

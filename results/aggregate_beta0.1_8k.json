@@ -1,0 +1,394 @@
+{
+  "tags": [
+    "s0",
+    "s1",
+    "s2"
+  ],
+  "n_seeds": 3,
+  "results": {
+    "UltraFeedback (ID)": {
+      "implicit": {
+        "len_controlled_acc": {
+          "mean": 0.6011,
+          "ci95": 0.0617,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.6336,
+          "ci95": 0.0208,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.3064,
+          "ci95": 0.0159,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 442
+      },
+      "explicit": {
+        "len_controlled_acc": {
+          "mean": 0.6663,
+          "ci95": 0.0101,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.6961,
+          "ci95": 0.0137,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.2806,
+          "ci95": 0.0117,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 442
+      },
+      "base_logprob": {
+        "len_controlled_acc": {
+          "mean": 0.5294,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.5383,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.3673,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 442
+      },
+      "_mcnemar_p_impl_vs_expl": {
+        "mean": 8e-05,
+        "per_seed": [
+          0.0,
+          0.00013,
+          0.00011
+        ]
+      }
+    },
+    "RewardBench:Chat (OOD)": {
+      "implicit": {
+        "len_controlled_acc": {
+          "mean": 0.7917,
+          "ci95": 0.0896,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.7672,
+          "ci95": 0.0222,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.2937,
+          "ci95": 0.0129,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 32
+      },
+      "explicit": {
+        "len_controlled_acc": {
+          "mean": 0.7135,
+          "ci95": 0.112,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.8994,
+          "ci95": 0.0481,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.2174,
+          "ci95": 0.033,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 32
+      },
+      "base_logprob": {
+        "len_controlled_acc": {
+          "mean": 0.5,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.6006,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.3941,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 32
+      },
+      "_mcnemar_p_impl_vs_expl": {
+        "mean": 1e-05,
+        "per_seed": [
+          0.0,
+          0.0,
+          3e-05
+        ]
+      }
+    },
+    "RewardBench:Chat-Hard (OOD)": {
+      "implicit": {
+        "len_controlled_acc": {
+          "mean": 0.543,
+          "ci95": 0.1008,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.5007,
+          "ci95": 0.0301,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.3481,
+          "ci95": 0.0086,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 62
+      },
+      "explicit": {
+        "len_controlled_acc": {
+          "mean": 0.621,
+          "ci95": 0.1388,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.4035,
+          "ci95": 0.0552,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.3055,
+          "ci95": 0.0152,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 62
+      },
+      "base_logprob": {
+        "len_controlled_acc": {
+          "mean": 0.6613,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.4408,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.3443,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 62
+      },
+      "_mcnemar_p_impl_vs_expl": {
+        "mean": 0.00248,
+        "per_seed": [
+          1e-05,
+          0.00121,
+          0.00622
+        ]
+      }
+    },
+    "RewardBench:Safety (OOD)": {
+      "implicit": {
+        "len_controlled_acc": {
+          "mean": 0.4859,
+          "ci95": 0.0962,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.5847,
+          "ci95": 0.0269,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.3459,
+          "ci95": 0.008,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 83
+      },
+      "explicit": {
+        "len_controlled_acc": {
+          "mean": 0.5743,
+          "ci95": 0.1052,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.5671,
+          "ci95": 0.0603,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.31,
+          "ci95": 0.0319,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 83
+      },
+      "base_logprob": {
+        "len_controlled_acc": {
+          "mean": 0.5301,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.5324,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.3426,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 83
+      },
+      "_mcnemar_p_impl_vs_expl": {
+        "mean": 0.52044,
+        "per_seed": [
+          1.0,
+          0.45939,
+          0.10194
+        ]
+      }
+    },
+    "RewardBench:Reasoning (OOD)": {
+      "implicit": {
+        "len_controlled_acc": {
+          "mean": 0.8487,
+          "ci95": 0.0079,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.8069,
+          "ci95": 0.0241,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.3982,
+          "ci95": 0.007,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 908
+      },
+      "explicit": {
+        "len_controlled_acc": {
+          "mean": 0.6727,
+          "ci95": 0.0206,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.6245,
+          "ci95": 0.1369,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.4457,
+          "ci95": 0.0031,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 908
+      },
+      "base_logprob": {
+        "len_controlled_acc": {
+          "mean": 0.9064,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.7338,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.4515,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 908
+      },
+      "_mcnemar_p_impl_vs_expl": {
+        "mean": 0.0,
+        "per_seed": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    },
+    "HH-harmless (OOD)": {
+      "implicit": {
+        "len_controlled_acc": {
+          "mean": 0.4783,
+          "ci95": 0.0325,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.5159,
+          "ci95": 0.0078,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.3593,
+          "ci95": 0.0086,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 276
+      },
+      "explicit": {
+        "len_controlled_acc": {
+          "mean": 0.4306,
+          "ci95": 0.1002,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.4436,
+          "ci95": 0.0604,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.3557,
+          "ci95": 0.015,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 276
+      },
+      "base_logprob": {
+        "len_controlled_acc": {
+          "mean": 0.4348,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "accuracy": {
+          "mean": 0.4511,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "ece": {
+          "mean": 0.3443,
+          "ci95": 0.0,
+          "n_seeds": 3
+        },
+        "len_controlled_n": 276
+      },
+      "_mcnemar_p_impl_vs_expl": {
+        "mean": 0.0,
+        "per_seed": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      }
+    }
+  }
+}

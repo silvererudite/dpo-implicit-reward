@@ -37,11 +37,14 @@ def main(cfg, budget):
         target_modules=cfg["target_modules"], task_type="SEQ_CLS",
     )
 
-    train = to_rm(build_budget_subsets("train_prefs")[budget])
+    # Identical pairs to DPO: same length-eligible pool, so nothing is dropped here that
+    # DPO merely truncated (that mismatch made the 8k budgets differ, 7520 vs 8000).
+    train = to_rm(build_budget_subsets("train_prefs", tok, cfg["max_length"],
+                                       cfg.get("max_prompt_length", cfg["max_length"]))[budget])
 
     run = f"rm-{budget}-seed{cfg['seed']}"
     args = RewardConfig(
-        output_dir=f"{cfg['output_root']}/rm_{budget}",
+        output_dir=f"{cfg['output_root']}/rm_{budget}_s{cfg['seed']}",
         num_train_epochs=cfg["epochs"],
         per_device_train_batch_size=cfg["batch_size"],
         gradient_accumulation_steps=cfg["grad_accum"],
@@ -65,5 +68,9 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
     ap.add_argument("--budget", default="8k", choices=["2k", "8k", "32k"])
+    ap.add_argument("--seed", type=int, default=None, help="override cfg seed (multi-seed runs)")
     a = ap.parse_args()
-    main(yaml.safe_load(open(a.config)), a.budget)
+    _cfg = yaml.safe_load(open(a.config))
+    if a.seed is not None:
+        _cfg["seed"] = a.seed
+    main(_cfg, a.budget)
