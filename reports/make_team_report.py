@@ -112,10 +112,10 @@ story += [P("DPO&rsquo;s Implicit Reward &mdash; Team Draft", TITLE),
           Spacer(1, 5), HRFlowable(width="100%", color=colors.HexColor("#c9c9c9")), Spacer(1, 3)]
 
 story += [P("Status", H2)]
-story += [P("Everything below is the completed one-epoch experiment at "
-            f"{NSEED} seeds. A longer train-to-convergence run (4 epochs, 2 seeds, with held-out "
-            "evaluation during training) is <b>still running</b> and is deliberately excluded &mdash; "
-            "its early trend is noted in section 8 as a caveat, not as a result.", SMALL)]
+story += [P(f"Sections 1&ndash;7 are the completed one-epoch experiment at {NSEED} seeds. "
+            "Section 8 adds the train-to-convergence run (4 epochs, 2 seeds, held-out evaluation "
+            "every 100 steps), which has since finished and which settles whether the one-epoch "
+            "ranking was an artefact of stopping early.", SMALL)]
 
 # ------------------------------------------------------------------ 1 findings
 story += [P("1&nbsp;&nbsp;What we found", H1)]
@@ -330,13 +330,60 @@ story += [bullets([
     "<b>Not</b> a scale-general conclusion. This is one 0.5B model, one &beta;, one data budget.",
 ])]
 
-story += [P("8&nbsp;&nbsp;Known weaknesses and what is running", H1)]
+story += [P("8&nbsp;&nbsp;Does the ranking survive training to convergence?", H1)]
+story += [P("The strongest objection to everything above is that it compares two models which were "
+            "both still improving when training stopped. DPO and Bradley&ndash;Terry need not converge "
+            "at the same rate, so the ranking could invert with more training. We ran both for four "
+            "epochs with held-out evaluation every 100 steps on a shared 400-pair slice.")]
+story += figure("fig10_convergence.png",
+                "<b>Figure 6.</b> Held-out accuracy across four epochs; the band spans the two seeds. "
+                "The explicit model climbs to a peak near epoch 2 and then overfits. DPO&rsquo;s implicit "
+                "reward is flat from the start. The explicit model leads at every epoch.")
+story += [P("<b>The ranking does not invert.</b> The two do converge at different rates &mdash; the "
+            "reward model keeps improving for two epochs while the implicit reward saturates within "
+            "one &mdash; but the explicit model is ahead at every point past ~0.4 epochs, and the gap "
+            "is slightly <i>wider</i> at each method&rsquo;s own optimum (0.055) than at the arbitrary "
+            "one-epoch cutoff. H1 holds at convergence.")]
+story += [P("<b>Two practical consequences.</b> First, four epochs is worse than one for the reward "
+            "model: its optimum is near epoch 2 and it degrades after. Any budget ablation must not "
+            "fix epochs at 4. Second, training loss is useless as a stopping signal here &mdash; it "
+            "keeps falling long after held-out performance has turned.")]
+story += figure("fig11_long_curves.png",
+                "<b>Figure 7.</b> Training loss (left) against held-out loss (middle) and held-out "
+                "accuracy (right). The staircase drops at each epoch boundary are memorisation. "
+                "DPO&rsquo;s held-out loss never improves on its starting value; the reward "
+                "model&rsquo;s improves until epoch 2, then both diverge sharply.", max_h=4.2*inch)
+story += [P("<i>Training loss falls from 0.61 to 0.02 (DPO) and 0.62 to 0.08 (reward model) over the "
+            "four epochs, while held-out loss roughly doubles for both. Held-out accuracy degrades far "
+            "more gently than held-out loss, which means what collapses first is calibration, not "
+            "ranking.</i>", SMALL)]
+
+story += [P("8.1&nbsp;&nbsp;A hypothesis we tested and had to abandon", H2)]
+story += [P("We expected the explicit model&rsquo;s length preference to <i>grow</i> with training. "
+            "That would have been a tidy result: one mechanism explaining its in-distribution gains, "
+            "its collapse on the length-inverted Chat-Hard subset, and the shape of its overfitting "
+            "curve. We scored all eight checkpoints of each model on 500 held-out pairs to check.")]
+story += figure("fig12_bias_drift.png",
+                "<b>Figure 8.</b> Deviation from the human rate on the same pairs (left) against "
+                "accuracy (right), across eight checkpoints per model.", max_h=3.6*inch)
+story += [P("<b>The hypothesis is wrong for the explicit model.</b> Its length bias peaks early "
+            "(+0.069 at epoch 1.5) and then <i>fades</i> to +0.002 by epoch 4 &mdash; by the end it "
+            "matches the human rate almost exactly. Its accuracy peaks and falls on roughly the same "
+            "schedule, so the bias is not what drives the overfitting; both are symptoms of the model "
+            "moving off the general heuristic and onto memorised training examples.")]
+story += [P("<b>A different drift showed up instead.</b> DPO&rsquo;s implicit reward moves steadily "
+            "<i>away</i> from humans in the opposite direction: from &minus;0.134 to &minus;0.232, "
+            "ending up preferring the shorter answer far more often than humans do (32.5% pick-longer "
+            "against a human rate of 55.7%). Its accuracy declines in step, 0.649 to 0.573. So DPO "
+            "training progressively teaches an anti-length preference that the preference data does "
+            "not support &mdash; a plausible mechanism for why the implicit reward saturates so early "
+            "and then slowly degrades.")]
+story += [P("<i>Reported because the prediction failed. Both drifts are single-seed and measured on "
+            "500 pairs; the explicit fade and the DPO drift both want a second seed before being "
+            "leaned on.</i>", SMALL)]
+
+story += [P("9&nbsp;&nbsp;Known weaknesses", H1)]
 story += [bullets([
-    "<b>One epoch may be the wrong stopping point.</b> Both objectives were still descending when we "
-    "stopped, and the two need not converge at the same rate. A 4-epoch run with held-out evaluation "
-    "every 100 steps is in flight. Its early trend &mdash; DPO flat from ~0.4 epochs while the reward "
-    "model is still climbing at 1.2 &mdash; suggests the one-epoch comparison may have cut the reward "
-    "model off mid-improvement. Treat as preliminary; the run is unfinished.",
     "<b>&pi;<sub>ref</sub> was trained once.</b> Seeds vary only the second stage, so the confidence "
     "intervals capture training variance given one particular reference, not variance of the method.",
     "<b>The untrained baseline has no error bars</b> for the same reason &mdash; it depends only on that "
@@ -351,13 +398,12 @@ story += [bullets([
     "took ~1.7&times; the wall-clock of the reward model.",
 ])]
 
-story += [P("9&nbsp;&nbsp;Next", H1)]
+story += [P("10&nbsp;&nbsp;Next", H1)]
 story += [bullets([
-    "Finish the convergence run and re-compare at each method&rsquo;s own peak rather than at an "
-    "arbitrary one epoch.",
-    "Test whether the explicit model&rsquo;s length bias <i>grows</i> with training &mdash; checkpoints "
-    "every 250 steps make this directly measurable, and it would explain both its in-distribution gains "
-    "and its Chat-Hard collapse with one mechanism.",
+    "Re-run the headline comparison at each method&rsquo;s own optimum (epoch 2 for the reward model, "
+    "epoch 1 for DPO) rather than at a shared arbitrary budget.",
+    "Confirm the convergence result with length-controlled rather than raw accuracy, since the reward "
+    "model&rsquo;s climb could partly be sharpening its length preference.",
     "Replace length filtering with length adjustment to recover power on the small sets.",
     "Reseed &pi;<sub>ref</sub> so the intervals describe the method rather than one reference.",
     "Then the planned ablations: &beta; &isin; {0.05, 0.1, 0.3, 0.5} and budget &isin; {2k, 8k, 32k}.",
