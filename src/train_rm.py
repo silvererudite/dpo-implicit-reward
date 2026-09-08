@@ -15,7 +15,7 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from peft import LoraConfig, PeftModel
 from trl import RewardTrainer, RewardConfig
 
-from src.prepare import build_budget_subsets, to_rm
+from src.prepare import build_budget_subsets, to_rm, heldout_pairs
 from src.runtime import model_dtype, wandb_setup, log_budget
 
 
@@ -42,6 +42,13 @@ def main(cfg, budget):
     train = to_rm(build_budget_subsets("train_prefs", tok, cfg["max_length"],
                                        cfg.get("max_prompt_length", cfg["max_length"]))[budget])
 
+    # Same held-out pairs as DPO, so the two convergence curves are directly comparable.
+    ev = None
+    if cfg.get("eval_steps"):
+        ev = to_rm(heldout_pairs(tok, cfg["max_length"],
+                                 cfg.get("max_prompt_length", cfg["max_length"]),
+                                 cfg.get("heldout_n", 400)))
+
     run = f"rm-{budget}-seed{cfg['seed']}"
     args = RewardConfig(
         output_dir=f"{cfg['output_root']}/rm_{budget}_s{cfg['seed']}",
@@ -49,14 +56,18 @@ def main(cfg, budget):
         per_device_train_batch_size=cfg["batch_size"],
         gradient_accumulation_steps=cfg["grad_accum"],
         learning_rate=cfg["lr"], lr_scheduler_type="cosine", warmup_ratio=0.03,
-        max_length=cfg["max_length"], logging_steps=20, save_strategy="epoch",
+        max_length=cfg["max_length"], logging_steps=20,
+        save_strategy=cfg.get("save_strategy", "epoch"), save_steps=cfg.get("save_steps", 500),
+        eval_strategy=("steps" if ev is not None else "no"),
+        eval_steps=cfg.get("eval_steps"),
+        per_device_eval_batch_size=cfg.get("eval_batch_size", 8),
         max_steps=cfg.get("max_steps", -1),          # >0 for a quick smoke test
         bf16=cfg.get("bf16", True), fp16=cfg.get("fp16", False),  # T4: bf16:false, fp16:true
         gradient_checkpointing=cfg.get("gradient_checkpointing", False),
         gradient_checkpointing_kwargs={"use_reentrant": False},
         seed=cfg["seed"], run_name=run, report_to=wandb_setup(cfg, run),
     )
-    trainer = RewardTrainer(model=model, args=args, train_dataset=train,
+    trainer = RewardTrainer(model=model, args=args, train_dataset=train, eval_dataset=ev,
                             processing_class=tok, peft_config=peft_cfg)
     trainer.train()
     trainer.save_model(args.output_dir)

@@ -80,6 +80,17 @@ def length_eligible(split: str, tok, max_length: int, max_prompt_length: int,
     return keep
 
 
+def heldout_pairs(tok, max_length: int, max_prompt_length: int, n: int = 400) -> List[Dict]:
+    """A held-out slice for measuring generalization *during* training.
+
+    Drawn from UltraFeedback test_prefs and passed to BOTH trainers, so the DPO and BT
+    convergence curves are measured on identical pairs. Without this there is no way to
+    see where each method peaks -- training loss keeps falling long after held-out
+    accuracy stops improving, so "train longer" would otherwise be flying blind.
+    """
+    return length_eligible("test_prefs", tok, max_length, max_prompt_length, pool=None)[:n]
+
+
 def build_budget_subsets(split: str = "train_prefs", tok=None, max_length: Optional[int] = None,
                          max_prompt_length: Optional[int] = None) -> Dict[str, List[Dict]]:
     """Nested subsets (32k superset of 8k superset of 2k) so scale is the only variable.

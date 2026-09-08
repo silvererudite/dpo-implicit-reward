@@ -15,7 +15,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 from peft import LoraConfig, PeftModel
 from trl import DPOTrainer, DPOConfig
 
-from src.prepare import build_budget_subsets, to_dpo
+from src.prepare import build_budget_subsets, to_dpo, heldout_pairs
 from src.runtime import model_dtype, wandb_setup, log_budget
 
 
@@ -43,6 +43,13 @@ def main(cfg, beta, budget):
     train = to_dpo(build_budget_subsets("train_prefs", tok, cfg["max_length"],
                                         cfg["max_prompt_length"])[budget])
 
+    # Held-out eval is opt-in (config sets eval_steps). It does not alter training, so runs
+    # with and without it remain comparable -- only wall-clock differs.
+    ev = None
+    if cfg.get("eval_steps"):
+        ev = to_dpo(heldout_pairs(tok, cfg["max_length"], cfg["max_prompt_length"],
+                                  cfg.get("heldout_n", 400)))
+
     run = f"dpo-beta{beta}-{budget}-seed{cfg['seed']}"
     args = DPOConfig(
         output_dir=f"{cfg['output_root']}/dpo_beta{beta}_{budget}_s{cfg['seed']}",
@@ -55,6 +62,9 @@ def main(cfg, beta, budget):
         logging_steps=20,
         # checkpoints across training -> training-progress / overoptimization ablation
         save_strategy="steps", save_steps=cfg["save_steps"],
+        eval_strategy=("steps" if ev is not None else "no"),
+        eval_steps=cfg.get("eval_steps"),
+        per_device_eval_batch_size=cfg.get("eval_batch_size", 8),
         max_steps=cfg.get("max_steps", -1),          # >0 for a quick smoke test
         bf16=cfg.get("bf16", True), fp16=cfg.get("fp16", False),  # T4: bf16:false, fp16:true
         gradient_checkpointing=cfg.get("gradient_checkpointing", False),
@@ -69,7 +79,8 @@ def main(cfg, beta, budget):
         target_modules=cfg["target_modules"], task_type="CAUSAL_LM",
     )
     trainer = DPOTrainer(model=policy, ref_model=None, args=args,
-                         train_dataset=train, processing_class=tok, peft_config=peft_cfg)
+                         train_dataset=train, eval_dataset=ev,
+                         processing_class=tok, peft_config=peft_cfg)
     trainer.train()
     trainer.save_model(args.output_dir)
     log_budget(args.output_dir, trainer, "dpo", {"beta": beta, "budget": budget})

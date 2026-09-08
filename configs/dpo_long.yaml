@@ -1,0 +1,31 @@
+# DPO policy pi_theta -> implicit reward. Sweep --beta {0.05,0.1,0.3,0.5} and --budget {2k,8k,32k}.
+base_model: Qwen/Qwen2.5-0.5B
+sft_merged_dir: outputs/sft_merged      # merged pi_ref (see src/merge_sft.py)
+output_root: outputs
+
+# match SFT/RM LoRA + optimization for budget-matched comparison
+lora_r: 16
+lora_alpha: 32
+lora_dropout: 0.05
+target_modules: [q_proj, k_proj, v_proj, o_proj, gate_proj, up_proj, down_proj]
+
+epochs: 4                               # train to convergence, not one pass
+batch_size: 4
+grad_accum: 4
+lr: 5.0e-5
+max_length: 1024
+max_prompt_length: 512
+save_steps: 250                         # checkpoints -> training-progress ablation (M8)
+seed: 0
+report_to: wandb
+wandb_project: dpo-implicit-reward
+gradient_checkpointing: true
+bf16: true          # Ampere (g5/A10G, A100). On a T4 set bf16:false, fp16:true
+fp16: false
+
+# Held-out accuracy during training. Training loss keeps falling after held-out accuracy
+# peaks, so without this "train longer" cannot distinguish converged from overfitting.
+# Identical slice is given to the RM, so the two convergence curves are comparable.
+eval_steps: 100
+heldout_n: 400
+eval_batch_size: 8
