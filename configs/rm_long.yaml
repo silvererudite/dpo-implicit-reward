@@ -1,7 +1,9 @@
 # Explicit Bradley-Terry reward model. Compute matched to DPO. Sweep --budget {2k,8k,32k}.
 base_model: Qwen/Qwen2.5-0.5B
 sft_merged_dir: outputs/sft_merged      # same start as DPO (identical initial weights)
-output_root: outputs
+output_root: outputs/long                # MUST differ from the 1-epoch runs:
+                                        # dir names are (model, beta, budget, seed) only,
+                                        # so a shared root silently overwrites them
 
 # identical LoRA + optimization budget as DPO
 lora_r: 16

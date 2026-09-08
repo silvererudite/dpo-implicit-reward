@@ -1,7 +1,9 @@
 # DPO policy pi_theta -> implicit reward. Sweep --beta {0.05,0.1,0.3,0.5} and --budget {2k,8k,32k}.
 base_model: Qwen/Qwen2.5-0.5B
 sft_merged_dir: outputs/sft_merged      # merged pi_ref (see src/merge_sft.py)
-output_root: outputs
+output_root: outputs/long                # MUST differ from the 1-epoch runs:
+                                        # dir names are (model, beta, budget, seed) only,
+                                        # so a shared root silently overwrites them
 
 # match SFT/RM LoRA + optimization for budget-matched comparison
 lora_r: 16
@@ -28,4 +30,4 @@ fp16: false
 # Identical slice is given to the RM, so the two convergence curves are comparable.
 eval_steps: 100
 heldout_n: 400
-eval_batch_size: 8
+eval_batch_size: 2                      # DPO eval holds policy+reference activations; 8 fragmented the allocator
