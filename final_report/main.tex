@@ -28,9 +28,9 @@ ID 21141119 & ID 17301022 & ID 17301033
 Direct Preference Optimization (DPO) claims to skip the reward-model stage of RLHF entirely: a
 DPO-trained policy is itself, implicitly, a reward model. We test this claim as a
 preference-ranking task. Under a matched training budget we train a Qwen2.5-0.5B policy with
-LoRA from one shared SFT checkpoint into three scorers --- a DPO policy's implicit reward, an
+LoRA from one shared SFT checkpoint into three scorers (a DPO policy's implicit reward, an
 explicitly trained Bradley--Terry reward model, and an SFT log-probability baseline with no
-reward-specific training --- and score all three as pairwise classifiers in distribution, on
+reward-specific training), and score all three as pairwise classifiers in distribution, on
 four RewardBench shift subsets, and on a cross-dataset shift set, over five seeds. In
 distribution the explicit reward model wins (0.663 vs.\ 0.600 length-controlled accuracy, all
 five seed-level McNemar tests on the full test set significant): \textbf{H1 is supported}. The
@@ -173,7 +173,7 @@ data.
 \caption{Pipeline overview (left to right). \textbf{(1)}~One SFT pass on 32k \emph{chosen}
 UltraFeedback responses yields the shared reference policy $\pi_{\mathrm{ref}}$. \textbf{(2)}~From
 that identical start, two conditions train on the \emph{same} 8k preference pairs, differing only
-in loss --- DPO ($\to\pi_\theta$) and a Bradley--Terry reward model ($\to r_\phi$); $\pi_{
+in loss: DPO ($\to\pi_\theta$) and a Bradley--Terry reward model ($\to r_\phi$); $\pi_{
 \mathrm{ref}}$ is also kept untrained. \textbf{(3)}~Three scorers are read off: the implicit
 reward $\hat r=\beta\log(\pi_\theta/\pi_{\mathrm{ref}})$, which reuses $\pi_{\mathrm{ref}}$
 (dashed); the explicit reward $r_\phi$; and the SFT log-probability baseline $\log\pi_{\mathrm{
@@ -186,8 +186,8 @@ and under shift.}
 \label{sec:dataset}
 All data are established public benchmarks (Table~\ref{tab:datasets}).
 UltraFeedback~\cite{cui2023ultrafeedback} supplies the training pairs and the in-distribution
-held-out test set. RewardBench~\cite{lambert2024rewardbench} supplies four shift subsets ---
-Chat, Chat-Hard, Safety, Reasoning --- built to stress-test reward models on harder and
+held-out test set. RewardBench~\cite{lambert2024rewardbench} supplies four shift subsets
+(Chat, Chat-Hard, Safety, Reasoning) built to stress-test reward models on harder and
 adversarially-constructed comparisons. Anthropic's HH-RLHF~\cite{bai2022hh} (the test split of
 \texttt{harmless-base}) supplies a cross-dataset shift test: a different collection process
 entirely, with human rather than AI-judge labels. Every example is normalized to the same
@@ -240,7 +240,7 @@ Figure~\ref{fig:models} summarizes the three training objectives.
     \textbf{(a) SFT} \\[2pt]
     Objective: next-token cross-entropy on the \emph{chosen} response only. \\[2pt]
     Produces: $\pi_{\mathrm{ref}}$, merged into standalone weights (\emph{not} left as an
-    adapter --- see \S\ref{sec:pipeline-check}).
+    adapter; see \S\ref{sec:pipeline-check}).
   };
   \node[box, right=6mm of a] (b) {
     \textbf{(b) DPO} \\[2pt]
@@ -291,7 +291,7 @@ Extended-training ablation & 4 epochs, 2 seeds, held-out eval every 100 steps \\
 Every trained scorer produces a scalar $s(x,y)$: for the implicit reward, $s = \hat r =
 \beta\log[\pi_\theta(y\mid x)/\pi_{\mathrm{ref}}(y\mid x)]$; for the reward model, $s =
 r_\phi(x,y)$; for the SFT baseline, $s = \log\pi_{\mathrm{ref}}(y\mid x)$. Each $s$ is used only
-for ranking --- the scorer's decision is the sign of $s(x,y_c)-s(x,y_r)$ --- and \emph{pairwise
+for ranking (the scorer's decision is the sign of $s(x,y_c)-s(x,y_r)$), and \emph{pairwise
 accuracy}, the fraction of pairs ranked correctly, is the primary outcome.
 
 \emph{Length-controlled accuracy} restricts this to pairs with $\max(L_c,L_r)/\max(1,
@@ -371,7 +371,7 @@ floating point (TRL's padded batched forward passes versus our unpadded per-exam
 The residual's source is not characterized, but it cannot affect the reported metrics: pairwise
 accuracy depends only on the \emph{sign} of each scorer's own difference.
 
-Bringing up the training pipeline surfaced four correctness bugs, none of which crashed --- all
+Bringing up the training pipeline surfaced four correctness bugs, none of which crashed: all
 would have produced plausible, wrong results (Table~\ref{tab:bugs}).
 
 \begin{table}[H]
@@ -389,10 +389,10 @@ Wrong $\pi_{\mathrm{ref}}$ & DPO trains against the raw base model, not the SFT 
   Merge the SFT adapter into the base weights before DPO/RM & DPO loss is $\ln 2$ at step 0\tablefootnote{A zero-init LoRA gives $\pi_\theta = \pi_{\mathrm{ref}}$, hence zero margin and $-\log\sigma(0)=\ln 2$. The first \emph{logged} value is 0.679, TRL's mean over the first 20 steps.} \\
 Frozen RM head & Scalar head stays at random init; training does nothing to it &
   Merge SFT first, then attach a fresh sequence-classification head & \texttt{trainable == True} (measured) \\
-Train-pair mismatch & RewardTrainer drops long pairs, DPOTrainer truncates them --- 7{,}520 vs.\ 8{,}000 pairs at the same nominal budget &
+Train-pair mismatch & RewardTrainer drops long pairs, DPOTrainer truncates them: 7{,}520 vs.\ 8{,}000 pairs at the same nominal budget &
   Draw both trainers from one common length-eligible pool & Pool hash-identical between runs \\
 Multi-GPU batch inflation & HF \texttt{Trainer} auto-wraps in \texttt{DataParallel}; effective batch silently $4\times$ larger &
-  Pin every run to a single GPU & --- \\
+  Pin every run to a single GPU & n/a \\
 \bottomrule
 \end{tabular}
 \end{table}
@@ -454,7 +454,7 @@ Scored against the SFT log-probability baseline instead of chance, the baseline 
 \emph{both} trained scorers on RewardBench-Reasoning, and beats the implicit reward resolvably
 on Chat-Hard and Safety, where the explicit model's gap is not resolvable
 (Figure~\ref{fig:value-added}). On three of the five shifted sets, then, reward-model training
-left at least one scorer worse at ranking than the SFT policy's own untuned log-probability ---
+left at least one scorer worse at ranking than the SFT policy's own untuned log-probability,
 and not on the sets we would have guessed. Reasoning, the only subset where the baseline beats
 both, is RewardBench's code-and-mathematics split, not its adversarial one; on Chat-Hard, built
 specifically to invert the easy cues, the explicit model holds its ground.
