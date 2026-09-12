@@ -28,76 +28,74 @@ ID 21141119 & ID 17301022 & ID 17301033
 \begin{abstract}
 Direct Preference Optimization (DPO) claims to skip the reward-model stage of RLHF entirely: a
 DPO-trained policy is itself, implicitly, a reward model. We test this claim as a
-preference-ranking task. Under a training budget matched between conditions, we train a
-Qwen2.5-0.5B policy with LoRA from one shared SFT checkpoint into three scorers --- a DPO
-policy's implicit reward, an explicitly trained Bradley--Terry reward model, and an SFT
-log-probability baseline with no reward-specific training --- and evaluate all three as
-pairwise classifiers in distribution, on four RewardBench distribution-shift subsets, and on a
-cross-dataset shift set, across five seeds. In distribution, the explicit reward model wins
-(0.663 vs.\ 0.600 length-controlled accuracy, all five seed-level McNemar tests significant):
-\textbf{H1 is supported}. Out of distribution the predicted widening does not occur; where a
-resolvable difference exists (two of five shifted sets), it favors the implicit reward instead:
-\textbf{H2 is not supported}. On the hardest subsets, the SFT baseline beats both trained
-scorers. An extended four-epoch run and a per-checkpoint bias-drift analysis confirm the
-in-distribution ranking is not an artifact of stopping early, and implicate a length-preference
-confound in part of that gap.
+preference-ranking task. Under a matched training budget we train a Qwen2.5-0.5B policy with
+LoRA from one shared SFT checkpoint into three scorers --- a DPO policy's implicit reward, an
+explicitly trained Bradley--Terry reward model, and an SFT log-probability baseline with no
+reward-specific training --- and score all three as pairwise classifiers in distribution, on
+four RewardBench shift subsets, and on a cross-dataset shift set, over five seeds. In
+distribution the explicit reward model wins (0.663 vs.\ 0.600 length-controlled accuracy, all
+five seed-level McNemar tests on the full test set significant): \textbf{H1 is supported}. The
+predicted widening under shift does not occur; where a difference is resolvable (two of five
+shifted sets) it favors the implicit reward: \textbf{H2 is not supported}. The SFT baseline
+beats both trained scorers on RewardBench-Reasoning, and the implicit reward on two further
+shifted sets. A four-epoch run confirms the in-distribution ranking is not an artifact of
+stopping early, and a surface-feature analysis implicates response length in part of that gap,
+though the explicit model's length bias fades, not grows, as it trains.
 \end{abstract}
 
 \section{Introduction}
 
 Reinforcement Learning from Human Feedback (RLHF) is the standard recipe for aligning a
 pretrained language model with human preferences: collect pairwise comparisons between
-candidate responses, train an explicit reward model to predict which response people
-preferred, and then optimize the policy against that learned reward with reinforcement learning
-(typically PPO), subject to a KL penalty that keeps the policy close to a reference
-model~\cite{christiano2017deep, ouyang2022instructgpt}. That pipeline needs a separately
-trained reward model and an unstable, hyperparameter-sensitive reinforcement-learning stage.
-Direct Preference Optimization (DPO)~\cite{rafailov2023dpo} was proposed to skip both, training
-a policy directly on preference pairs with a simple supervised-style loss while implicitly
-optimizing the same KL-regularized objective; its title makes the strong version of the claim,
-that a DPO-trained policy \emph{is}, secretly, also a reward model. That reward is recoverable
-as $\hat r(x,y) = \beta\log[\pi_\theta(y\mid x)/\pi_{\mathrm{ref}}(y\mid x)]$, but the
-equivalence is exact only at the optimum, which a trained policy is not guaranteed to reach;
-what we test here is $\hat r$ as a practical preference scorer, in and out of distribution, not
-the theorem itself.
+candidate responses, train an explicit reward model to predict which one people preferred, then
+optimize the policy against that learned reward with reinforcement learning (typically PPO)
+under a KL penalty holding the policy near a reference model~\cite{christiano2017deep,
+ouyang2022instructgpt}. That pipeline needs a separately trained reward model and an unstable,
+hyperparameter-sensitive RL stage. Direct Preference Optimization (DPO)~\cite{rafailov2023dpo}
+skips both, training a policy directly on preference pairs with a simple supervised-style loss
+while implicitly optimizing the same KL-regularized objective. Its title makes the strong claim:
+a DPO-trained policy \emph{is}, secretly, also a reward model. That reward is recoverable as
+$\hat r(x,y) = \beta\log[\pi_\theta(y\mid x)/\pi_{\mathrm{ref}}(y\mid x)]$, but the equivalence
+is exact only at the optimum, which a trained policy need not reach. What we test is $\hat r$ as
+a practical preference scorer, in and out of distribution, not the theorem itself.
 
-Christiano et al.~\cite{christiano2017deep} introduced the core idea of learning a reward
-function from pairwise human preferences and optimizing a policy against it with reinforcement
-learning; its strength is generality (only comparative, not absolute, feedback is needed), but
-routing through PPO makes the resulting pipeline sensitive to reward-model quality and prone to
-reward hacking under prolonged optimization. Ouyang et al.~\cite{ouyang2022instructgpt} scaled
-this to language models with InstructGPT, explicitly training a Bradley--Terry-style reward
-model~\cite{bradley1952rank} and then fine-tuning the policy against it; the alignment gains
-were large, but the paper documents the same PPO instability and adds the cost of training and
-serving a separate reward model. Gao et al.~\cite{gao2023overoptimization} quantify how far a
-learned reward can be optimized before proxy and true reward diverge --- the failure our
-held-out comparison probes --- though their scaling laws are fitted against synthetic gold
-reward models rather than human labels. DPO~\cite{rafailov2023dpo} removes that stage by training the
-policy directly on preference pairs with a simpler, more stable loss; its limitation, as
-detailed above, is that it discards the reward model as an explicit, separately-evaluable
-object, so any downstream reuse of $\hat r$ as a scorer has not been validated the way an
-explicit reward model would be, and we did not identify prior work that directly compares its
-preference-ranking performance against an explicitly trained reward model under matched
-training conditions. SimPO~\cite{meng2024simpo} is one of several post-DPO variants that drop
-the reference policy for a length-normalized reward, saving memory and curbing length bias, but
-in doing so it removes the very $\pi_\theta/\pi_{\mathrm{ref}}$ ratio whose reuse as a reward
-model we test here. RewardBench~\cite{lambert2024rewardbench} is the closest prior work to a
-stress test of reward models, built around adversarial, distribution-shifted comparisons, but
-it evaluates only explicitly-trained reward models, not policies read out as implicit ones.
-Two further ingredients make our question tractable at small scale: LoRA~\cite{hu2022lora}
-allows several full training conditions to be run and compared on a single consumer GPU, at the
-cost of not testing full-parameter fine-tuning; and UltraFeedback~\cite{cui2023ultrafeedback}
-supplies the large, AI-scored preference pool our budget-matched training draws from, though its
-preferences reflect an AI judge's biases rather than human raters' directly.
+Christiano et al.~\cite{christiano2017deep} introduced the core idea: learn a reward function
+from pairwise human preferences and optimize a policy against it with RL. Its strength is
+generality, since only comparative feedback is needed. But routing through PPO leaves the
+pipeline sensitive to reward-model quality and prone to reward hacking under prolonged
+optimization. Ouyang et al.~\cite{ouyang2022instructgpt} scaled this to language models with
+InstructGPT, training a Bradley--Terry-style reward model~\cite{bradley1952rank} and fine-tuning
+the policy against it. The alignment gains were large, but the paper documents the same PPO
+instability and adds the cost of serving a separate reward model. Gao et
+al.~\cite{gao2023overoptimization} quantify how far a learned reward can be optimized before
+proxy and true reward diverge, the failure our held-out comparison probes, although their
+scaling laws are fitted against synthetic gold reward models, not human labels.
+DPO~\cite{rafailov2023dpo} removes that stage with a simpler, more stable loss on the preference
+pairs themselves. Its limitation is that it discards the reward model as an explicit,
+separately-evaluable object, so reuse of $\hat r$ as a scorer has never been validated the way
+an explicit reward model would be, and we found no prior work comparing the two directly under
+matched training conditions. SimPO~\cite{meng2024simpo} is one of several post-DPO
+variants that drop the reference policy for a length-normalized reward, saving memory and
+curbing length bias, but in doing so it removes the very $\pi_\theta/\pi_{\mathrm{ref}}$ ratio
+whose reuse as a reward model we test here. Closest to a stress test is
+RewardBench~\cite{lambert2024rewardbench}, built around adversarial, distribution-shifted
+comparisons, but it evaluates only explicitly-trained reward models, never a policy read out as
+an implicit one. Three further ingredients make the question tractable at small scale.
+LoRA~\cite{hu2022lora} lets several full training conditions run on one consumer GPU, at the
+cost of not testing full-parameter fine-tuning. UltraFeedback~\cite{cui2023ultrafeedback}
+supplies the preference pool our budget-matched training draws from, with the caveat that its
+labels come from an AI judge. Anthropic's HH-RLHF~\cite{bai2022hh}, our cross-dataset shift set,
+was human-annotated instead, so it tests generalization across the labelling process as well as
+the data.
 
-This gap matters practically: if the implicit reward generalizes as well as an explicit one,
-DPO checkpoints could be reused as reward models, removing a training stage from the RLHF
-pipeline; if it does not, the ``secretly a reward model'' framing needs the qualification that
-it holds only in a narrow, training-distribution sense. We test two pre-registered hypotheses:
+This gap matters practically. If the implicit reward generalizes as well as an explicit one,
+DPO checkpoints could be reused as reward models, removing a stage from the RLHF pipeline; if
+not, the ``secretly a reward model'' framing needs qualifying as holding only in a narrow,
+training-distribution sense. We test two hypotheses stated in advance in our project proposal:
 \textbf{H1}, the explicit reward model beats the implicit reward on held-out in-distribution
-pairs, and \textbf{H2}, that gap widens under distribution shift. We treat a null result
-(implicit $\approx$ explicit) as equally publishable, since it would itself substantiate DPO's
-claim empirically at small scale.
+pairs, and \textbf{H2}, that gap widens under distribution shift. We committed beforehand to
+reporting either outcome, since a null result would itself substantiate DPO's claim at small
+scale.
 
 \subsection{Our Contribution}
 \begin{itemize}
@@ -114,60 +112,91 @@ claim empirically at small scale.
 \section{Material and Methods}
 
 \subsection{Overview}
-Figure~\ref{fig:pipeline} shows the overall pipeline. A single supervised fine-tuning (SFT)
-pass produces the shared reference policy $\pi_{\mathrm{ref}}$. Two training conditions then
-branch off from that identical starting point: DPO produces a policy $\pi_\theta$ from which the
-implicit reward is read off after training with no further reward-specific training, and a
-Bradley--Terry reward model is trained explicitly on the same pairs. Both are evaluated as
-pairwise preference classifiers on held-out data.
+Figure~\ref{fig:pipeline} shows the pipeline. One supervised fine-tuning (SFT) pass produces the
+shared reference policy $\pi_{\mathrm{ref}}$. Two conditions branch off that identical starting
+point: DPO produces a policy $\pi_\theta$ whose implicit reward is read off after training, with
+no reward-specific training of its own, and a Bradley--Terry reward model is trained explicitly
+on the same pairs. Both are then evaluated as pairwise preference classifiers on held-out
+data.
 
 \begin{figure}[H]
 \centering
+\resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
-  node distance=10mm and 14mm,
-  box/.style={draw, rounded corners, align=center, minimum height=10mm, minimum width=28mm,
-              font=\small, fill=blue!6},
-  data/.style={draw, rounded corners, align=center, minimum height=9mm, minimum width=26mm,
-               font=\scriptsize, fill=gray!10},
-  arr/.style={-{Latex[length=2.2mm]}, thick}
+  every node/.style={font=\small},
+  box/.style={draw, rounded corners, align=center, minimum height=11mm, minimum width=26mm,
+              fill=blue!6, inner sep=2pt},
+  data/.style={draw, rounded corners, align=center, minimum height=11mm, minimum width=24mm,
+               fill=gray!12, inner sep=2pt},
+  ref/.style={draw, rounded corners, align=center, minimum height=11mm, minimum width=26mm,
+              fill=gray!6, inner sep=2pt},
+  reward/.style={box, fill=orange!14, minimum width=32mm},
+  evalbox/.style={box, fill=green!12, minimum width=28mm},
+  arr/.style={-{Latex[length=2.2mm]}, thick},
+  dep/.style={-{Latex[length=2.2mm]}, thick, dashed, gray!55!black},
+  deplbl/.style={font=\scriptsize\itshape, text=gray!55!black, inner sep=1.5pt}
 ]
-  \node[data] (data) {UltraFeedback\\(train pairs)};
-  \node[box, right=of data] (sft) {SFT\\$\pi_{\mathrm{ref}}$};
-  \node[box, above right=8mm and 16mm of sft] (dpo) {DPO training\\$\pi_\theta$};
-  \node[box, below right=8mm and 16mm of sft] (rm) {Bradley--Terry\\reward model $r_\phi$};
-  \node[box, right=22mm of dpo, fill=orange!12] (implicit) {Implicit reward\\$\hat r=\beta\log\frac{\pi_\theta}{\pi_{\mathrm{ref}}}$};
-  \node[box, right=22mm of rm, fill=orange!12] (explicit) {Explicit reward\\$r_\phi(x,y)$};
-  \node[box, right=32mm of sft, fill=green!10, yshift=0mm] (eval) {Evaluation:\\pairwise accuracy\\ID + OOD};
+  % ---- column x-positions, three lanes at y = +1.9 / 0 / -1.9 ----
+  \node[data]    (data) at (0,0)      {UltraFeedback\\preference data};
+  \node[box]     (sft)  at (3.4,0)    {SFT\\$\pi_{\mathrm{ref}}$\\{\scriptsize 32k chosen}};
 
+  \node[box]     (dpo)  at (7.2,1.9)  {DPO training\\$\pi_\theta$\\{\scriptsize 8k pairs}};
+  \node[ref]     (mid)  at (7.2,0)    {$\pi_{\mathrm{ref}}$\\{\scriptsize (no training)}};
+  \node[box]     (rm)   at (7.2,-1.9) {Bradley--Terry\\reward model $r_\phi$\\{\scriptsize 8k pairs}};
+
+  \node[reward]  (imp)  at (11.4,1.9) {Implicit reward\\$\hat r=\beta\log\frac{\pi_\theta}{\pi_{\mathrm{ref}}}$};
+  \node[ref]     (bl)   at (11.4,0)   {SFT log-prob\\$\log\pi_{\mathrm{ref}}$\\{\scriptsize baseline}};
+  \node[reward]  (exp)  at (11.4,-1.9){Explicit reward\\$r_\phi(x,y)$};
+
+  \node[evalbox] (eval) at (15.2,0)   {Evaluation\\pairwise acc.\\ID + OOD};
+
+  % ---- Stage 1: data -> SFT ----
   \draw[arr] (data) -- (sft);
+
+  % ---- Stage 2: shared SFT forks into three lanes (straight) ----
   \draw[arr] (sft) -- (dpo);
+  \draw[arr] (sft) -- (mid);
   \draw[arr] (sft) -- (rm);
-  \draw[arr] (dpo) -- (implicit);
-  \draw[arr] (rm) -- (explicit);
-  \draw[arr] (implicit) -- (eval);
-  \draw[arr] (explicit) -- (eval);
-  \draw[arr] (sft.east) .. controls +(20mm,18mm) and +(-10mm,0mm) .. (eval.west)
-    node[midway, above, font=\scriptsize] {SFT baseline};
-\end{tikzpicture}
-\caption{Pipeline overview. \emph{Budget-matched} means both conditions share one SFT
-checkpoint, the same preference pairs, LoRA configuration, effective batch size, and optimizer
-steps; only the loss differs. $\pi_{\mathrm{ref}}$ is also scored directly, as the SFT
-log-probability baseline.}
+
+  % ---- Stage 3: each lane yields a scorer (straight) ----
+  \draw[arr] (dpo) -- (imp);
+  \draw[arr] (mid) -- (bl);
+  \draw[arr] (rm)  -- (exp);
+
+  % ---- implicit reward reuses pi_ref ----
+  \draw[dep] (bl) -- (imp) node[deplbl, midway, right]{$\pi_{\mathrm{ref}}$};
+
+  % ---- Stage 4: all three scorers -> evaluation (clean fan-in) ----
+  \draw[arr] (imp) -- (eval.north west);
+  \draw[arr] (bl)  -- (eval.west);
+  \draw[arr] (exp) -- (eval.south west);
+\end{tikzpicture}}
+\caption{Pipeline overview (left to right). \textbf{(1)}~One SFT pass on 32k \emph{chosen}
+UltraFeedback responses yields the shared reference policy $\pi_{\mathrm{ref}}$. \textbf{(2)}~From
+that identical start, two conditions train on the \emph{same} 8k preference pairs, differing only
+in loss --- DPO ($\to\pi_\theta$) and a Bradley--Terry reward model ($\to r_\phi$); $\pi_{
+\mathrm{ref}}$ is also kept untrained. \textbf{(3)}~Three scorers are read off: the implicit
+reward $\hat r=\beta\log(\pi_\theta/\pi_{\mathrm{ref}})$, which reuses $\pi_{\mathrm{ref}}$
+(dashed); the explicit reward $r_\phi$; and the SFT log-probability baseline $\log\pi_{\mathrm{
+ref}}$. \textbf{(4)}~All three are evaluated as pairwise preference classifiers, in distribution
+and under shift.}
 \label{fig:pipeline}
 \end{figure}
 
 \subsection{Dataset Description}
 \label{sec:dataset}
-All data are established public benchmarks (Table~\ref{tab:datasets}). UltraFeedback~\cite{
-cui2023ultrafeedback} supplies both the training pairs and the in-distribution held-out test
-set. RewardBench~\cite{lambert2024rewardbench} supplies four distribution-shift subsets ---
-Chat, Chat-Hard, Safety, and Reasoning --- built specifically to stress-test reward models on
-harder and adversarially-constructed comparisons. Anthropic's HH-RLHF (harmless-base split)
-supplies a cross-dataset shift test, since it comes from a different data-collection process
-entirely. Every example is normalized to the same (\emph{prompt}, \emph{chosen},
-\emph{rejected}) schema. Training pairs for the matched comparison are drawn from a common
-length-eligible pool so both conditions see the identical first 8,000 examples
-(Table~\ref{tab:bugs} details why this pool is necessary).
+All data are established public benchmarks (Table~\ref{tab:datasets}).
+UltraFeedback~\cite{cui2023ultrafeedback} supplies the training pairs and the in-distribution
+held-out test set. RewardBench~\cite{lambert2024rewardbench} supplies four shift subsets ---
+Chat, Chat-Hard, Safety, Reasoning --- built to stress-test reward models on harder and
+adversarially-constructed comparisons. Anthropic's HH-RLHF~\cite{bai2022hh} (the test split of
+\texttt{harmless-base}) supplies a cross-dataset shift test: a different collection process
+entirely, with human rather than AI-judge labels. Every example is normalized to the same
+(\emph{prompt}, \emph{chosen}, \emph{rejected}) schema. HH-RLHF needs one extra step, since its
+transcripts are multi-turn and the branches differ only in the final assistant turn: everything
+up to the last \texttt{Human:} turn becomes the prompt, and that final turn the response.
+Training pairs are drawn from a common length-eligible pool so both conditions see the identical
+first 8,000 examples (Table~\ref{tab:bugs} says why that pool is necessary).
 
 \begin{table}[H]
 \centering
@@ -190,15 +219,16 @@ HH-RLHF (harmless) & OOD test & cross-dataset shift & 2{,}312 & 276 \\
 
 \subsection{Tools, Models, and Algorithms Used}
 \label{sec:tools}
-The base model for every condition is Qwen2.5-0.5B, a small, publicly available
-instruction-capable language model, chosen so that all three training conditions plus the
-extended-training ablation fit on a single 24\,GB GPU (NVIDIA A10G). All fine-tuning uses
+The base model for every condition is Qwen2.5-0.5B~\cite{qwen2025}, a small, publicly available
+pretrained language model. It is the base checkpoint, not the instruction-tuned one; supplying
+that stage is what the shared SFT pass is for. It is small enough that all three conditions plus
+the extended-training ablation fit on one 24\,GB GPU (NVIDIA A10G). All fine-tuning uses
 Low-Rank Adaptation (LoRA)~\cite{hu2022lora} with rank $r=16$, $\alpha=32$, dropout $0.05$,
 applied to every attention and MLP projection matrix, via HuggingFace's TRL library. The shared
-reference policy $\pi_{\mathrm{ref}}$ is produced by one epoch of SFT on the \emph{chosen}
-responses from 32,000 length-eligible UltraFeedback pairs (1,998 optimizer steps). ($\pi_{
-\mathrm{ref}}$ is a shared input to the matched comparison, not one of the compared conditions,
-so it is not budget-limited.) Figure~\ref{fig:models} summarizes the three training objectives.
+reference policy $\pi_{\mathrm{ref}}$ is one epoch of SFT on the \emph{chosen} responses from
+32,000 length-eligible UltraFeedback pairs (1,998 optimizer steps); as a shared input to the
+matched comparison rather than one of the compared conditions, it is not budget-limited.
+Figure~\ref{fig:models} summarizes the three training objectives.
 
 \begin{figure}[H]
 \centering
@@ -267,33 +297,47 @@ accuracy}, the fraction of pairs ranked correctly, is the primary outcome.
 
 \emph{Length-controlled accuracy} restricts this to pairs with $\max(L_c,L_r)/\max(1,
 \min(L_c,L_r)) \le 1.2$, where $L_c,L_r$ are character lengths of the response text (prompt
-excluded, un-tokenized); this filter is aggressive on the smaller RewardBench subsets. We also
-report non-neural floors (random, pick-longer, TF-IDF+LR) with no language-model fine-tuning,
-for comparison alongside the SFT baseline.
+excluded, un-tokenized); the filter is aggressive on the smaller RewardBench subsets. We also
+report non-neural floors (random, pick-longer, TF-IDF+LR) alongside the SFT baseline.
 
 \emph{ECE} is computed over 10 equal-width confidence bins, per seed on the full test set (not
-length-controlled) and averaged. \emph{McNemar's exact test} (a binomial test on the discordant pairs) is run separately per
-seed between the implicit and explicit scorers; we report the resulting range of five p-values
-rather than their mean, since independent p-values should not be averaged. The reported 95\%
+length-controlled) and averaged. \emph{McNemar's exact test} (a binomial test on the discordant
+pairs) is run per seed between the implicit and explicit scorers, also on the full test set, so
+it tests \emph{accuracy} and not length-controlled accuracy; the two can disagree, and on one
+set below they do. We report the range of the five p-values, not their mean, since independent
+p-values should not be averaged, and read each at $\alpha = 0.05$ with no correction for the
+number of seeds or sets. The reported 95\%
 CI is $\bar x \pm t_{0.975,4}\,s/\sqrt5$ over the five seed-level values of a given (test set,
 scorer, metric) triple, where $s$ is their sample standard deviation (\S\ref{sec:threats}
 discusses what this interval does and does not capture). We write \emph{CI excludes/includes 0}
-for whether a paired explicit-minus-implicit difference is resolvable at this sample size.
+for whether a paired difference is \emph{resolvable} at this sample size: explicit minus
+implicit in Table~\ref{tab:results}, or either scorer minus the SFT baseline in
+\S\ref{sec:value-added}.
+
+\emph{Data splits.} All training draws on UltraFeedback's \texttt{train\_prefs}: the 8,000
+budget-matched pairs for DPO and the reward model, and the 32,000 behind the shared SFT
+reference. All evaluation draws on data no condition trained on: \texttt{test\_prefs} (1,997
+pairs, after dropping empty responses) for the ID test, plus RewardBench and HH-RLHF, untouched
+by training. There is no separate validation split. The 400-pair slice tracking held-out accuracy
+during the extended-training run (\S\ref{sec:ablations}) and the 499-pair slice behind the
+bias-drift analysis both come from \texttt{test\_prefs}, so both are subsets of the ID test set.
+Nothing was tuned on them, but the four-epoch curves are consequently measured on the same
+distribution, and partly the same examples, as the ID column of Table~\ref{tab:results}.
 
 \section{Experimental Analysis}
 
-\noindent Code, configuration files, and the full pipeline used to produce every number and
-figure below are available at \url{https://github.com/silvererudite/dpo-implicit-reward}, with
-every per-pair score persisted to disk so every number below is recomputable without re-running
-any model.
+\noindent Code, configuration files, and the full pipeline are available at
+\url{https://github.com/silvererudite/dpo-implicit-reward}, with every per-pair score persisted
+to disk, so every accuracy, calibration, and significance number below is recomputable without
+re-running any model. Optimizer-step counts and wall-clock timings are the exception: those come
+from training logs we did not commit.
 
 \subsection{Non-neural reference floors}
 Table~\ref{tab:baselines} shows the zero-training reference floors. Pick-longer wins
 RewardBench-Chat (0.805) but collapses on Chat-Hard (0.294), which inverts that cue by
-construction, so raw accuracy on these benchmarks is substantially a length signal; this
-motivates length-controlled accuracy as the primary metric below. TF-IDF+LR lands
-below chance on Reasoning (0.282), suggesting the lexical cues it relies on are actively
-misleading on that subset.
+construction, so raw accuracy here is substantially a length signal. This motivates
+length-controlled accuracy as the primary metric below. TF-IDF+LR lands below chance on
+Reasoning (0.282), suggesting the lexical cues it relies on are actively misleading there.
 
 \begin{table}[H]
 \centering
@@ -316,27 +360,25 @@ HH-RLHF (harmless) & 0.500 & 0.445 & 0.453 \\
 
 \subsection{Pipeline correctness pass}
 \label{sec:pipeline-check}
-We cross-checked our implicit-reward extraction against TRL's own internal DPO reward
-computation on a batch of trained-on pairs, on five points:
+We cross-checked our implicit-reward extraction against TRL's internal DPO reward computation on
+a batch of trained-on pairs, on five points:
 (i) our tokenization matches TRL's token-for-token;
-(ii) our per-pair values agree with TRL's logged ones up to a small residual attributable to
-batching and floating point (padded batched forward passes inside TRL versus our unpadded
-per-example ones);
-(iii) the extracted reward is exactly linear in $\beta$, ruling out a scaling bug;
-(iv) an unmasked-prompt control shifts the reward far more than that residual, ruling out a
-masking bug by comparison;
+(ii) our per-pair values agree with TRL's logged ones up to a small residual from batching and
+floating point (TRL's padded batched forward passes versus our unpadded per-example ones);
+(iii) the reward is exactly linear in $\beta$, ruling out a scaling bug;
+(iv) an unmasked-prompt control shifts it far more than that residual, ruling out a masking bug;
 (v) $\pi_{\mathrm{ref}}$ is bit-identical to TRL's adapter-disabled reference.
-The residual's exact source is not characterized, but it does not affect the reported metrics:
-pairwise accuracy depends only on the \emph{sign} of each scorer's own difference.
+The residual's source is not characterized, but it cannot affect the reported metrics: pairwise
+accuracy depends only on the \emph{sign} of each scorer's own difference.
 
-Bringing up the training pipeline separately surfaced four correctness bugs, none of which
-crashed --- all would have produced plausible, wrong results (Table~\ref{tab:bugs}).
+Bringing up the training pipeline surfaced four correctness bugs, none of which crashed --- all
+would have produced plausible, wrong results (Table~\ref{tab:bugs}).
 
 \begin{table}[H]
 \centering
 \small
 \caption{Correctness bugs found and fixed before trusting any result. The first two fixes are
-why the SFT adapter is merged into standalone weights rather than left live beneath
+why the SFT adapter is merged into standalone weights instead of being left live beneath
 DPO/reward-model training.}
 \label{tab:bugs}
 \begin{tabular}{p{2.6cm}p{4.3cm}p{4.3cm}p{2.8cm}}
@@ -344,7 +386,7 @@ DPO/reward-model training.}
 Bug & Symptom if unfixed & Fix & Verified by \\
 \midrule
 Wrong $\pi_{\mathrm{ref}}$ & DPO trains against the raw base model, not the SFT policy &
-  Merge the SFT adapter into the base weights before DPO/RM & DPO loss starts at exactly $\ln 2$ \\
+  Merge the SFT adapter into the base weights before DPO/RM & DPO loss is $\ln 2$ at step 0\tablefootnote{A zero-init LoRA gives $\pi_\theta = \pi_{\mathrm{ref}}$, hence zero margin and $-\log\sigma(0)=\ln 2$. The first \emph{logged} value is 0.679, TRL's mean over the first 20 steps.} \\
 Frozen RM head & Scalar head stays at random init; training does nothing to it &
   Merge SFT first, then attach a fresh sequence-classification head & \texttt{trainable == True} (measured) \\
 Train-pair mismatch & RewardTrainer drops long pairs, DPOTrainer truncates them --- 7{,}520 vs.\ 8{,}000 pairs at the same nominal budget &
@@ -356,9 +398,11 @@ Multi-GPU batch inflation & HF \texttt{Trainer} auto-wraps in \texttt{DataParall
 \end{table}
 
 \subsection{H1: in-distribution comparison}
-In distribution, the explicit reward model wins (Table~\ref{tab:results}) in every individual
-seed, with all five seed-level McNemar tests significant ($p<0.0001$--$0.0019$).
-\textbf{H1 is supported.}
+In distribution the explicit reward model wins (Table~\ref{tab:results}) in every individual
+seed, and all five seed-level McNemar tests are significant ($p < 0.0001$ to $0.002$). Those
+tests run on the full test set (\S\ref{sec:eval}), so they corroborate the ranking without
+testing the length-controlled column itself. Here the two agree, the explicit model leading on
+both (0.691 vs.\ 0.632 raw). \textbf{H1 is supported.}
 
 \begin{table}[H]
 \centering
@@ -385,9 +429,16 @@ HH-RLHF (harmless)       & 0.472 $\pm$ 0.016 & 0.429 $\pm$ 0.036 & 0.435 & $-0.0
 
 \subsection{H2: does the gap widen out of distribution?}
 Pairing the explicit-minus-implicit difference \emph{within} each seed, so run-to-run variance
-cancels, three of five OOD sets show no resolvable difference (Chat, Chat-Hard, Safety); on the
+cancels, three of five OOD sets show no resolvable difference (Chat, Chat-Hard, Safety). On the
 two that do, Reasoning and HH-RLHF, the difference runs opposite to H2, favoring the implicit
 reward (Figure~\ref{fig:paired-delta}, Table~\ref{tab:results}). \textbf{H2 is not supported.}
+
+Chat is the one set where the two statistics disagree. Its McNemar tests are all significant,
+since on the full 358 pairs the explicit model leads 0.904 to 0.746. But length control keeps
+only 32 pairs, and there the ranking reverses to 0.747 against 0.800 with an interval spanning
+zero. Each reading is correct about its own metric, and which to believe turns on how much of
+that lead is the length cue pick-longer exploits to 0.805 on this very subset
+(Table~\ref{tab:baselines}), a question \S\ref{sec:length} returns to.
 
 \begin{figure}[H]
 \centering
@@ -398,12 +449,15 @@ crossing zero (grey) are not resolvable.}
 \end{figure}
 
 \subsection{An unplanned finding: reward training can underperform the SFT baseline}
+\label{sec:value-added}
 Scored against the SFT log-probability baseline instead of chance, the baseline beats
-\emph{both} trained scorers on RewardBench-Reasoning; on Chat-Hard it beats the implicit reward
-resolvably, while the explicit model's gap is not resolvable (Figure~\ref{fig:value-added}).
-Reward-model training, explicit or implicit, can therefore leave a scorer worse at ranking
-preferences than the SFT policy's own untuned log-probability, on exactly the subsets
-RewardBench designed to be hard and adversarial.
+\emph{both} trained scorers on RewardBench-Reasoning, and beats the implicit reward resolvably
+on Chat-Hard and Safety, where the explicit model's gap is not resolvable
+(Figure~\ref{fig:value-added}). On three of the five shifted sets, then, reward-model training
+left at least one scorer worse at ranking than the SFT policy's own untuned log-probability ---
+and not on the sets we would have guessed. Reasoning, the only subset where the baseline beats
+both, is RewardBench's code-and-mathematics split, not its adversarial one; on Chat-Hard, built
+specifically to invert the easy cues, the explicit model holds its ground.
 
 \begin{figure}[H]
 \centering
@@ -414,39 +468,55 @@ training left the scorer \emph{worse} at ranking.}
 \end{figure}
 
 \subsection{Length confound and surface-feature associations}
-Length control matters: the explicit reward model scores below chance on Chat-Hard before
-length control (0.414) and recovers once length-matched (Table~\ref{tab:results}), a shift
-large enough to flip its ranking relative to chance. More generally, the explicit model and the
-SFT baseline are both associated with preferring longer, more formatted, more numeric responses
-relative to the human labels (10--16 points of deviation), while the implicit reward tracks the
-human rate closely (Figure~\ref{fig:qualitative}). Response length is therefore one likely
+\label{sec:length}
+Length control matters: the explicit reward model scores below chance on Chat-Hard before it
+(0.414) and recovers once length-matched (Table~\ref{tab:results}), a shift large enough to flip
+its ranking relative to chance. More generally, the explicit model and the SFT baseline both
+pick longer, more formatted, more numeric responses more often than the dataset labels do, by 3
+to 16 points depending on the feature and by 12 and 16 points on length itself. The implicit
+reward deviates less on average and in the opposite direction, picking those same features
+\emph{less} often than the labels (Figure~\ref{fig:qualitative}). It is not uniformly closer,
+though: its largest deviation anywhere in the figure is on hedging and disclaimers ($-12.6$
+points), where the explicit model is much closer. Response length is therefore one likely
 contributor to H1's in-distribution gap and to the explicit model's raw-accuracy collapse on
 length-inverted subsets like Chat-Hard.
+
+Table~\ref{tab:results} also holds one result length alone does not explain. On HH-RLHF every
+scorer, trained or not, ranks below chance on the length-matched pairs (0.472, 0.429, 0.435).
+Length is part of it: pick-longer scores 0.445 on the full set (Table~\ref{tab:baselines}) and
+the explicit model and SFT baseline score 0.446 and 0.451, tracking that floor almost exactly,
+so the shorter response is usually the labelled one and any scorer preferring length inherits a
+below-chance ranking. But length matching removes that cue and all three stay below chance.
+HH-RLHF is also the only set with human labels, and its ``harmless'' preferences reward refusal
+and de-escalation, which nothing in UltraFeedback training rewards. We flag this as unexplained.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.96\linewidth]{figures/fig9_what_they_reward.png}
-\caption{Deviation from the human rate on the same pairs, per surface feature (top), with one
-worked example (bottom).}
+\caption{Deviation from each dataset's own label rate, per surface feature (top), with one worked
+example (bottom). The figure reads ``human'', but UltraFeedback's labels are an AI judge's
+(\S\ref{sec:dataset}).}
 \label{fig:qualitative}
 \end{figure}
 
 \subsection{Ablations: extended training and length-bias drift}
 \label{sec:ablations}
-Re-running both conditions for four epochs (two seeds), with held-out pairwise accuracy
-measured every 100 steps on a shared 400-pair slice, tests whether the one-epoch ranking is an
-artifact of stopping two still-improving models (Figure~\ref{fig:convergence}). The explicit
-reward model climbs to a peak of $0.731$ near epoch 2 and then overfits; the implicit reward is
-flat from the start, peaking at $0.676$ near epoch 1. The explicit model is ahead at every
-epoch past $\sim$0.4: its lead is $\approx0.048$ at the one-epoch mark (0.724 vs.\ 0.676) and
-$0.055$ at each method's own best checkpoint, slightly wider rather than
-narrower.\footnote{Different metric and sample from Table~\ref{tab:results}'s $+0.062$; not
-directly comparable.} \textbf{H1 remains supported through the full four-epoch run; the ranking
-does not invert.} We stop short of calling this ``convergence'': the reward model is still
-visibly overfitting, not plateaued, by epoch 4. Training loss keeps falling long after held-out
-loss turns (Figure~\ref{fig:long-curves}), so it is not a usable stopping signal here; the
-reward model's best checkpoint is near epoch 2, so four epochs is worse than one for it
-specifically.
+Re-running both conditions for four epochs (two seeds), with held-out pairwise accuracy measured
+every 100 steps on a shared slice of 400 UltraFeedback pairs, tests whether the one-epoch ranking
+is an artifact of stopping two still-improving models (Figure~\ref{fig:convergence}). Both
+trainers get the same slice, though the reward-model trainer drops a few over-length pairs, so
+its own evaluation set is 394--398 of the 400. The explicit reward model climbs to a peak of
+$0.731$ near epoch 2 and then overfits; the implicit reward is flat from the start, peaking at
+$0.676$ near epoch 1. The explicit model is ahead at every epoch past $\sim$0.4, by
+$\approx0.048$ at the one-epoch mark (0.724 vs.\ 0.676) and $0.055$ at each method's own best
+checkpoint: the gap widens slightly over the run, it does not
+close.\footnote{Different metric from Table~\ref{tab:results}'s $+0.062$, and measured on a
+400-pair subset of that test set, so the two are not directly comparable.} \textbf{H1 remains
+supported through the full four-epoch run; the ranking does not invert.} We stop short of
+calling this ``convergence'': the reward model is still visibly overfitting by epoch 4, and
+training loss keeps falling long after held-out loss turns (Figure~\ref{fig:long-curves}), so
+loss is not a usable stopping signal here. Its best checkpoint is near epoch 2, which makes four
+epochs worse than one for it specifically.
 
 \begin{figure}[H]
 \centering
@@ -462,21 +532,25 @@ specifically.
 \label{fig:long-curves}
 \end{figure}
 
-Scoring all eight saved checkpoints of each condition on 500 held-out pairs tests whether
-either scorer's length bias grows with training (Figure~\ref{fig:bias-drift}; accuracy over the
-same checkpoints: Figure~\ref{fig:convergence}). The hypothesis is \textbf{wrong for the
-explicit model}: its length bias peaks early ($+0.069$ relative to the human rate at epoch 1.5)
-and fades to $+0.002$ by epoch 4, on roughly the same schedule as its accuracy peaking and
-falling. The implicit reward drifts the other way instead: its deviation from the human rate
-moves from $-0.134$ to $-0.232$, so it ends up picking the \emph{longer} response only 32.5\%
-of the time against a human rate of 55.7\%, with accuracy declining in step. This is consistent
-with an anti-length preference induced by DPO training that contributes to why the implicit
-reward saturates early and then degrades; both drifts are single-seed.
+Scoring all eight saved checkpoints of each condition on a separate 499-pair draw (492 with a
+length difference to measure) tests whether either scorer's length bias grows with training
+(Figure~\ref{fig:bias-drift}). The hypothesis is \textbf{wrong for the explicit model}: its bias
+peaks early ($+0.069$ against the label rate at epoch 1.5) and fades to $+0.002$ by epoch 4, on
+roughly the schedule of its accuracy peaking and falling (0.719 at epoch 1.5, 0.685 at epoch 4
+on this draw). The implicit reward drifts the other way, from $-0.134$ to $-0.232$, ending up
+picking the \emph{longer} response only 32.5\% of the time where the labels pick it 55.7\%, with
+accuracy falling from 0.649 at epoch 1 to 0.573 by epoch 4. This is consistent with an
+anti-length preference induced by DPO training that contributes to why the implicit reward
+saturates early and then degrades. Two caveats: both drifts are single-seed, and this draw is
+not the 400-pair slice behind Figure~\ref{fig:convergence}, so accuracies here sit a point or
+two off that curve.
 
 \begin{figure}[H]
 \centering
 \includegraphics[width=0.72\linewidth]{figures/fig12_bias_drift.png}
-\caption{Length preference relative to the human rate, across eight checkpoints per model.}
+\caption{Length preference relative to the label rate, across eight checkpoints per model.
+Measured on UltraFeedback \texttt{test\_prefs}: as in Figure~\ref{fig:qualitative}, the axis
+reads ``human'' but the labels are an AI judge's.}
 \label{fig:bias-drift}
 \end{figure}
 
@@ -485,31 +559,29 @@ reward saturates early and then degrades; both drifts are single-seed.
 Several limitations bound how far these results generalize.
 
 \textbf{Sample size.} The three sets marked $^\dagger$ in Table~\ref{tab:datasets} fall below
-100 length-matched pairs, the filter having removed up to roughly 90\% of each. Their
-length-controlled numbers, reported to three decimals only for consistency with the rest of the
-table, indicate direction rather than precise estimates; a length-adjusted regression, rather
-than length filtering, would recover the lost statistical power.
+100 length-matched pairs, the filter having removed roughly 90\% of each. Their length-controlled
+numbers, given to three decimals only for consistency with the rest of the table, indicate
+direction and not precise estimates; a length-adjusted regression would recover the power the
+filter costs.
 
-\textbf{What is not matched.} Wall-clock time and total FLOPs are not matched, since DPO
-performs an extra frozen-reference forward pass every step and took approximately $1.7\times$
-the reward model's wall-clock time for the same optimizer steps. This is a matched
-\emph{training budget} (Figure~\ref{fig:pipeline}), not matched compute in the FLOP sense.
+\textbf{What is not matched.} Wall-clock time and FLOPs are not, since DPO performs an extra
+frozen-reference forward pass every step and took about $1.7\times$ the reward model's wall-clock
+time for the same optimizer steps. This is a matched \emph{training budget}
+(Figure~\ref{fig:pipeline}), not matched compute in the FLOP sense.
 
 \textbf{$\pi_{\mathrm{ref}}$ was trained once.} Seeds vary only the second-stage
-(DPO/reward-model) training, so the reported intervals capture variance from that stage given
-one fixed reference, not variance of the method as a whole --- which is also why the SFT
-baseline's interval in Figure~\ref{fig:value-added} has zero width.
+(DPO/reward-model) training, so the intervals capture variance from that stage given one fixed
+reference, not of the method as a whole. It is also why the SFT baseline's interval in
+Figure~\ref{fig:value-added} has zero width.
 
 \textbf{Associations, not mechanisms.} The surface-feature effects in
 Figure~\ref{fig:qualitative} are correlational and overlapping, since longer responses also
-tend to contain more numbers and bullets, so isolating length would need a joint model.
-Likewise the readings in \S3.5 and \S\ref{sec:ablations} of \emph{why} training degrades
-performance, or why the implicit reward drifts toward shorter responses, are consistent with
-the data rather than established causes.
+carry more numbers and bullets, so isolating length would need a joint model. Likewise the
+readings in \S\ref{sec:value-added} and \S\ref{sec:ablations} of \emph{why} training degrades
+performance are consistent with the data, not established causes.
 
-\textbf{Calibration} is poor across the board (ECE 0.22--0.45 across scorers and sets), which
-matters if the practical pitch is reusing either kind of scorer as a probability estimate
-rather than only a ranker.
+\textbf{Calibration} is poor across the board (ECE 0.22--0.45), which matters if the practical
+pitch is reusing either scorer as a probability estimate and not only as a ranker.
 
 \textbf{Scope.} Every result is at one model scale (0.5B), one $\beta$ (0.1), and one training
 budget (8{,}000 pairs); the $\beta \in \{0.05, 0.1, 0.3, 0.5\}$ and budget $\in \{2\text{k},
@@ -518,17 +590,22 @@ budget (8{,}000 pairs); the $\beta \in \{0.05, 0.1, 0.3, 0.5\}$ and budget $\in 
 \section{Conclusion}
 Budget-matched from one shared starting checkpoint (Figure~\ref{fig:pipeline}), an explicitly
 trained Bradley--Terry reward model beats DPO's implicit reward on held-out, in-distribution
-preference pairs, and the ranking survives an extended four-epoch run rather than reversing
+preference pairs, and the ranking holds through an extended four-epoch run without inverting
 (\textbf{H1 supported}). The predicted widening of that gap under distribution shift does not
-occur; where a difference is resolvable, it favors the implicit reward instead (\textbf{H2 not
+occur. Where a difference is resolvable, it favors the implicit reward instead (\textbf{H2 not
 supported}). Unplanned, an SFT log-probability baseline with no reward-specific training beats
-both trained scorers on the hardest, most adversarial subsets. DPO's ``secretly a reward
-model'' claim therefore holds only in a narrow, in-distribution sense at this scale: an
-explicit reward model is measurably better in distribution, but under shift neither trained
-scorer consistently beats the untrained baseline, within the bounds of
-\S\ref{sec:threats}. Future work should run the planned $\beta$/budget sweeps and re-seed the
-reference policy itself so reported intervals describe the method rather than one
-initialization.
+both trained scorers on RewardBench-Reasoning, and beats the implicit reward on Chat-Hard and
+Safety as well. DPO's ``secretly a reward model'' claim therefore holds only in a narrow,
+in-distribution sense at this scale: an explicit reward model is measurably better in
+distribution, but under shift neither trained scorer consistently beats the untrained baseline.
+
+Three limitations bound it (\S\ref{sec:threats} has the full list): every number is at one model
+scale, one $\beta$, and one training budget, so we cannot claim the ranking is stable along any
+of those axes; three of the five shifted sets keep under 100 pairs after length matching, which
+is why so many OOD differences are unresolvable; and $\pi_{\mathrm{ref}}$ was trained once, so
+the intervals describe variance in the second training stage, not in the method. Future work
+should run the planned $\beta$ and budget sweeps, re-seed the reference policy, and replace
+length filtering with a length-adjusted regression.
 
 \bibliography{myreferences}
 \bibliographystyle{unsrt}
