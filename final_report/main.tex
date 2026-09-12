@@ -327,9 +327,10 @@ distribution, and partly the same examples, as the ID column of Table~\ref{tab:r
 \section{Experimental Analysis}
 
 \noindent Code, configuration files, and the full pipeline are available at
-\url{https://github.com/silvererudite/dpo-implicit-reward}, with every per-pair score persisted
-to disk, so every accuracy, calibration, and significance number below is recomputable without
-re-running any model. Optimizer-step counts and wall-clock timings are the exception: those come
+\url{https://github.com/silvererudite/dpo-implicit-reward}, and the trained adapters and per-seed
+checkpoints at \url{https://huggingface.co/Shamima/dpo-implicit-reward}. Every per-pair score is
+persisted to disk, so every accuracy, calibration, and significance number below is recomputable
+without re-running any model. Optimizer-step counts and wall-clock timings are the exception: those come
 from training logs we did not commit.
 
 \subsection{Non-neural reference floors}
