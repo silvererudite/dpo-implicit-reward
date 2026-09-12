@@ -95,29 +95,24 @@ def main():
     if not dpo_tr:
         print("no long-run logs found; skipping figure"); return
 
-    fig, ax = plt.subplots(2, 3, figsize=(15, 8), facecolor=SURFACE)
-    line(ax[0][0], dpo_tr, "epoch", "loss");            style(ax[0][0], "DPO training loss", "loss")
+    # Accuracy panels are dropped here: they duplicate fig10_convergence.png at lower
+    # resolution (same held-out accuracy curves, coarser sampling).
+    fig, ax = plt.subplots(2, 2, figsize=(10, 8), facecolor=SURFACE)
+    line(ax[0][0], dpo_tr, "epoch", "loss");      style(ax[0][0], "DPO training loss", "loss")
     ax[0][0].axhline(0.6931, color=MUTED, lw=1.4, ls=(0, (4, 3)))
-    line(ax[0][1], dpo_ev, "epoch", "eval_loss");       style(ax[0][1], "DPO held-out loss", "loss")
-    line(ax[0][2], dpo_ev, "epoch", "eval_rewards/accuracies")
-    style(ax[0][2], "DPO held-out accuracy", "accuracy")
-    line(ax[1][0], rm_tr, "epoch", "loss");             style(ax[1][0], "Reward-model training loss", "loss")
+    line(ax[0][1], dpo_ev, "epoch", "eval_loss"); style(ax[0][1], "DPO held-out loss", "loss")
+    line(ax[1][0], rm_tr, "epoch", "loss");       style(ax[1][0], "Reward-model training loss", "loss")
     ax[1][0].axhline(0.6931, color=MUTED, lw=1.4, ls=(0, (4, 3)))
-    line(ax[1][1], rm_ev, "epoch", "eval_loss");        style(ax[1][1], "Reward-model held-out loss", "loss")
-    line(ax[1][2], rm_ev, "epoch", "eval_accuracy")
-    style(ax[1][2], "Reward-model held-out accuracy", "accuracy")
-    for a in (ax[0][2], ax[1][2]):
-        a.axhline(0.5, color=MUTED, lw=1.2, ls=(0, (4, 3)))
+    line(ax[1][1], rm_ev, "epoch", "eval_loss");  style(ax[1][1], "Reward-model held-out loss", "loss")
 
     fig.suptitle("Convergence run — 4 epochs, 2 seeds, β=0.1, 8k pairs",
-                 fontsize=14, color=INK, x=0.007, ha="left", fontweight="bold", y=0.995)
-    fig.text(0.007, 0.945, "Held-out columns are the generalization signal; training loss keeps "
-             "falling after held-out accuracy has peaked, which is why the training curve alone "
-             "cannot tell you when to stop.", fontsize=9, color=INK2)
+                 fontsize=14, color=INK, x=0.012, ha="left", fontweight="bold", y=0.99)
+    fig.text(0.012, 0.94, "Training loss keeps falling long after held-out loss turns, so it is "
+             "not a usable stopping signal (held-out accuracy: Figure 8).", fontsize=9, color=INK2)
     fig.legend(handles=[Line2D([], [], color=SEED_C[s], lw=2, label=f"seed {s}") for s in sorted(dpo_tr)],
                loc="upper right", frameon=False, fontsize=9, ncol=2,
-               bbox_to_anchor=(0.995, 1.005), labelcolor=INK2)
-    fig.tight_layout(rect=(0, 0, 1, 0.925))
+               bbox_to_anchor=(0.995, 1.0), labelcolor=INK2)
+    fig.tight_layout(rect=(0, 0, 1, 0.91))
     p = os.path.join(FIG, "fig11_long_curves.png")
     fig.savefig(p, dpi=200, facecolor=SURFACE); plt.close(fig)
     print("wrote", os.path.relpath(p, ROOT))

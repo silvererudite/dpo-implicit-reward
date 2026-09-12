@@ -1,0 +1,141 @@
+================================================================================
+PROMPTS 
+================================================================================
+
+[1] I have previously created a project proposal for my graduate rl course. now
+    pls plan out the tasks needed to accomplish this. for context the proposal is
+    given in 
+
+[2] when you are done planning I want you to init a git repo and create
+    a repo structure for the project for my team and I to work on and create a list
+    of subtasks I need to accomplish for implementing the project.
+
+[3] also my instrucor gave feedback after the proposal that I should use benchmark datasets
+
+[4] okay show me the list of tasks first
+
+[5] why baseline on cpu ? shouldn't we run the baselines on gpu as well?
+
+[6] I think you should use existing baseline datasets for this task. that is what I
+    meant to say. My instructor just commented to use baseline datasets after we
+    submitted the feedback
+
+[7] and use this git repo to push the project here
+    https://github.com/silvererudite/dpo-implicit-reward.git only use my credentials
+    to commit and push and no coauthorship.
+
+
+[8]  check if you have access to pull repos from my github
+
+[9]  I have the PAT now need you to clone repo
+
+[10]  what do I do with the .gitconfig file for you to have the token ?
+
+[11]  just use this credential for now [REDACTED CREDENTIAL] here is the repo
+     name https://github.com/silvererudite/dpo-implicit-reward pls clone it go
+     into that and start working from the task list
+
+[12]  and log the run to wandb
+
+[13]  commit it all as one commit
+
+[14]  and save the trained artifacts to HF for me
+
+[15]  and stop the training of Bradley terry for now 
+
+[16]  how long will eval take ?
+
+[17] use this token for HF to upload publicly [REDACTED CREDENTIAL]
+
+[18] yes add the results table to hf and github and commit it
+
+[19] push it
+
+[20] yes
+     (approval to rebuild the environment on persistent EFS storage after the
+     ephemeral NVMe mount was wiped by an instance restart)
+
+[21] yes start with the seeds and log the experiment in wandb as ususal and make
+     sure to save any artifacts in hf as well
+
+[22] check the status of the seed runs
+
+[23] what can you make from training alone
+
+[24] i dont understand, pls tell me without jargon
+
+[25] check the eval status
+
+[26] how far is the evaluation ?
+
+[27] create interesting plots with the data and results so that I can interpret
+     them or any reviwer can interpret them
+
+[28] can you help me analyse the results like a reviewer, what aspects would a
+     reviewer consider ?
+
+[29] i dont understand what you are saying
+
+[30] okay repeat for more runs then prepare to train for longer
+
+[31] check the eval status
+
+[32] is the new training running ?
+
+[33] i need you to regenerate the figures, but this time experiment with
+     different ways to visualize the information also what about the previous
+     surprising fing now that you flagged earlier the one with random baseline
+     beating trained and untrained ones
+
+[34] also make a figure where it shows types of responses with examples somehow
+     that the implicit, explicit and untrained model prefer
+
+[35] push the commit, this is the new HF token that I will rotate pls commit and
+     stage the latest changes [REDACTED CREDENTIAL]
+
+[36] create a draft new report with latest observations, changes and experiments
+     with figures for ppl in my team to interpret. clearly state the hypothesis
+     and methods and the experiments I did to make progress before this long
+     training run. make a pdf and save to repo
+
+[37] start the convergence run
+
+[38] is the training done?
+
+[39] yes do those tasks, regenerate and push the team report and then tell me.
+     also tell me your observations after the training. extract and preserve the
+     training curves for me to use later as well
+
+[40] what is the bias scoring here that you are doing
+
+[41] did you stage and push everything?
+
+[42] yes upload the checkpoints to hf and also document there how to access each
+     of the different checkpoints etc
+
+[43] okay git pull the latest changes and tell me how far things are done
+
+[44] okay the project is almost ready for submission with the current progress. you
+     need to look at the remote repo for the latest changes pushed and a pr for the
+     report. look at section 2, 2.1 and figure 1. i think figure 1 is wrong and is
+     the pipeline correct on what I did
+
+[45] can you create a corrected tikz model and save it locally first for me to review
+
+[46] [attached a screenshot of the rendered figure] this picture is correct but way
+     too complex. you need to find an easier way to visualize this picture. maybe
+     some other form of figure that shows the steps etc clearly but in a more
+     research paper way
+[47] Based on the codebase, project proposal, reference papers 
+     write the first draft of this project paper following the given template.
+     First gather context from the codebase, reference files and template. Then 
+     write the draft. 
+[48] Go through the report in final_report folder. Check for any grammatical
+     errors. Do not fix the errors in main.tex file. Come back to me with a 
+     report of the errors and suggested fixes. Write an error fix suggestion
+     report in a markdown file. 
+[49] Go through the report in final_report folder. Suggest me writing
+     improvements. Do not make changes in main.tex. Give me a report 
+     of your findings. Write the report in a markdown file. 
+[50] Go through the report in final_report folder. Write a report on the overall 
+     quality. If you find any inconsistencies report back to me. Do not make changes to the report. Write your report in a markdown file. 

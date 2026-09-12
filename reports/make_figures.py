@@ -27,7 +27,7 @@ os.makedirs(FIG, exist_ok=True)
 SURFACE = "#fcfcfb"; INK = "#0b0b0b"; INK2 = "#52514e"; MUTED = "#8a8a85"; GRID = "#e4e4e0"
 SERIES = {"implicit": "#2a78d6", "explicit": "#eb6834", "base_logprob": "#1baf7a"}
 LABEL = {"implicit": "DPO implicit reward", "explicit": "Explicit BT reward model",
-         "base_logprob": "Base log-prob (no reward training)"}
+         "base_logprob": "SFT baseline (no reward training)"}
 ORDER = ["implicit", "explicit", "base_logprob"]
 SETS = ["UltraFeedback (ID)", "RewardBench:Chat (OOD)", "RewardBench:Chat-Hard (OOD)",
         "RewardBench:Safety (OOD)", "RewardBench:Reasoning (OOD)", "HH-harmless (OOD)"]
@@ -228,9 +228,10 @@ def _lc_per_seed(seeds, tags, s, scorer):
 def fig6_value_added(agg, seeds, tags):
     """Did reward training help at all, versus not training one?
 
-    Reframes every number against the untrained base log-prob baseline. Zero is not
-    'chance' here -- it is 'what you get for free', which is the comparison that actually
-    matters if the question is whether to train a reward model at all.
+    Reframes every number against the SFT log-probability baseline. Zero is not
+    'chance' here -- it is 'what you get without reward-specific training', which is the
+    comparison that actually matters if the question is whether to train a reward model
+    at all.
     """
     fig, ax = plt.subplots(figsize=(10.5, 7.4), facecolor=SURFACE)
     style(ax)
@@ -255,20 +256,20 @@ def fig6_value_added(agg, seeds, tags):
         row -= 0.55
     ax.axvline(0, color=INK, linewidth=2, zorder=2)
     for y, s, base in heads:
-        ax.annotate(f"{SHORT[s].replace(chr(10), ' ')}   ·   untrained baseline = {base:.3f}",
+        ax.annotate(f"{SHORT[s].replace(chr(10), ' ')}   ·   SFT baseline = {base:.3f}",
                     xy=(0.012, y), xycoords=("axes fraction", "data"),
                     va="center", ha="left", fontsize=9.5, color=INK,
                     fontweight="bold", annotation_clip=False)
     ax.set_yticks(yt); ax.set_yticklabels(yl, fontsize=9, color=INK2)
     ax.set_ylim(row + 0.6, 1.25)
     ax.set_xlim(-0.33, 0.40)
-    ax.set_xlabel("Accuracy minus the untrained baseline   (bars = 95% CI over "
+    ax.set_xlabel("Accuracy minus the SFT baseline   (bars = 95% CI over "
                   f"{len(tags)} seeds)", fontsize=9.5, color=INK2, labelpad=9)
     ax.set_title("Did training a reward model help — or hurt?", fontsize=13.5, color=INK,
                  pad=46, loc="left", fontweight="bold")
-    ax.annotate("Zero is the free baseline: the plain model's log-probability, no reward training. "
-                "Bars left of zero mean\ntraining made the scorer WORSE than not training one. "
-                "Grey = not distinguishable from the baseline.",
+    ax.annotate("Zero is the SFT baseline: the plain model's log-probability, no reward-specific "
+                "training. Bars left of zero mean\ntraining made the scorer WORSE than not "
+                "training one. Grey = not distinguishable from the baseline.",
                 xy=(0, 1.012), xycoords="axes fraction", fontsize=9, color=INK2, va="bottom")
     ax.legend(handles=[Line2D([], [], marker="s", linestyle="none", markersize=9, color=DIV_POS,
                               label="training helped"),
@@ -324,7 +325,7 @@ def fig7_small_multiples(agg, seeds, tags):
                label="DPO implicit"),
         Line2D([], [], marker="o", linestyle="none", markersize=8, color=SERIES["explicit"],
                label="Explicit RM"),
-        Line2D([], [], color=SERIES["base_logprob"], linewidth=2, label="untrained baseline"),
+        Line2D([], [], color=SERIES["base_logprob"], linewidth=2, label="SFT baseline"),
         Line2D([], [], color=MUTED, linewidth=1.2, linestyle=(0, (4, 3)),
                label="chance (shaded = worse than chance)")],
         loc="upper right", frameon=False, fontsize=9, ncol=4,
@@ -353,7 +354,7 @@ def fig8_head_to_head(agg, seeds, tags):
         im = _lc_per_seed(seeds, tags, s, "implicit").mean()
         ex = _lc_per_seed(seeds, tags, s, "explicit").mean()
         n = agg[s]["implicit"]["len_controlled_n"] or 1
-        # both must clear the untrained baseline for reward training to have earned its keep
+        # both must clear the SFT baseline for reward training to have earned its keep
         beats_base = min(im, ex) > agg[s]["base_logprob"]["len_controlled_acc"]["mean"]
         ax.scatter([im], [ex], s=40 + 160 * np.log10(n) / np.log10(1000),
                    color=(SERIES["explicit"] if beats_base else DIV_MID),
@@ -372,9 +373,9 @@ def fig8_head_to_head(agg, seeds, tags):
                 xy=(0, 1.012), xycoords="axes fraction", fontsize=9, color=INK2, va="bottom")
     ax.legend(handles=[
         Line2D([], [], marker="o", linestyle="none", markersize=9, color=SERIES["explicit"],
-               label="both scorers beat the untrained baseline"),
+               label="both scorers beat the SFT baseline"),
         Line2D([], [], marker="o", linestyle="none", markersize=9, color=DIV_MID,
-               label="at least one loses to the untrained baseline")],
+               label="at least one loses to the SFT baseline")],
         loc="lower right", frameon=False, fontsize=8.5, labelcolor=INK2)
     fig.tight_layout()
     p = os.path.join(FIG, "fig8_head_to_head.png")

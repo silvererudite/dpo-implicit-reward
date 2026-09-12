@@ -27,7 +27,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FIG = os.path.join(ROOT, "reports", "figures")
 SURFACE = "#fcfcfb"; INK = "#0b0b0b"; INK2 = "#52514e"; MUTED = "#8a8a85"; GRID = "#e4e4e0"
 SERIES = {"implicit": "#2a78d6", "explicit": "#eb6834", "base_logprob": "#1baf7a"}
-LABEL = {"implicit": "DPO implicit", "explicit": "Explicit RM", "base_logprob": "Untrained baseline"}
+LABEL = {"implicit": "DPO implicit", "explicit": "Explicit RM", "base_logprob": "SFT baseline"}
 ORDER = ["implicit", "explicit", "base_logprob"]
 TAGS = [f"s{i}" for i in range(5)]
 
@@ -129,11 +129,11 @@ def main():
     ax.xaxis.set_major_formatter(lambda v, _: f"{v:+.0%}")
     ax.set_xlabel("How much more often than humans the scorer picks the side with this feature",
                   fontsize=9.5, color=INK2, labelpad=8)
-    ax.set_title("What is each scorer actually rewarding?", fontsize=14, color=INK,
+    ax.set_title("Surface-feature association with each scorer's preferences", fontsize=14, color=INK,
                  pad=62, loc="left", fontweight="bold")
     ax.annotate("Zero = agrees with the human labels on the same pairs. Right of zero = over-prefers "
-                "that feature.\nThe explicit reward model and the untrained baseline both chase surface "
-                "form; the implicit reward does not.",
+                "that feature.\nThe explicit reward model and the SFT baseline are both strongly "
+                "associated with surface form; the implicit reward is not.",
                 xy=(0, 1.015), xycoords="axes fraction", fontsize=9.5, color=INK2, va="bottom")
     ax.legend(handles=[Line2D([], [], marker="o", linestyle="none", markersize=8,
                               color=SERIES[k], label=LABEL[k]) for k in ORDER],
